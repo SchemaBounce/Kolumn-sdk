@@ -9,10 +9,10 @@ import (
 // UniversalState represents the universal state format for all providers
 type UniversalState struct {
 	// Core State Information
-	Version          int64  `json:"version"`
-	TerraformVersion string `json:"terraform_version"`
-	Serial           int64  `json:"serial"`
-	Lineage          string `json:"lineage"`
+	Version       int64  `json:"version"`
+	KolumnVersion string `json:"kolumn_version"`
+	Serial        int64  `json:"serial"`
+	Lineage       string `json:"lineage"`
 
 	// Universal Resources
 	Resources []UniversalResource `json:"resources"`

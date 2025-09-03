@@ -207,12 +207,12 @@ type MockProvider struct {
 	CallFunctionFn func(ctx context.Context, function string, input json.RawMessage) (json.RawMessage, error)
 	CloseFn        func() error
 
-	// Terraform-compatible methods
+	// Kolumn-compatible methods
 	ValidateProviderConfigFn func(ctx context.Context, req *rpc.ValidateProviderConfigRequest) (*rpc.ValidateProviderConfigResponse, error)
 	ValidateResourceConfigFn func(ctx context.Context, req *rpc.ValidateResourceConfigRequest) (*rpc.ValidateResourceConfigResponse, error)
 	PlanResourceChangeFn     func(ctx context.Context, req *rpc.PlanResourceChangeRequest) (*rpc.PlanResourceChangeResponse, error)
 	ApplyResourceChangeFn    func(ctx context.Context, req *rpc.ApplyResourceChangeRequest) (*rpc.ApplyResourceChangeResponse, error)
-	ReadResourceFn           func(ctx context.Context, req *rpc.TerraformReadResourceRequest) (*rpc.TerraformReadResourceResponse, error)
+	ReadResourceFn           func(ctx context.Context, req *rpc.KolumnReadResourceRequest) (*rpc.KolumnReadResourceResponse, error)
 	ImportResourceStateFn    func(ctx context.Context, req *rpc.ImportResourceStateRequest) (*rpc.ImportResourceStateResponse, error)
 	UpgradeResourceStateFn   func(ctx context.Context, req *rpc.UpgradeResourceStateRequest) (*rpc.UpgradeResourceStateResponse, error)
 }
@@ -304,11 +304,11 @@ func (m *MockProvider) ApplyResourceChange(ctx context.Context, req *rpc.ApplyRe
 }
 
 // ReadResource implements UniversalProvider
-func (m *MockProvider) ReadResource(ctx context.Context, req *rpc.TerraformReadResourceRequest) (*rpc.TerraformReadResourceResponse, error) {
+func (m *MockProvider) ReadResource(ctx context.Context, req *rpc.KolumnReadResourceRequest) (*rpc.KolumnReadResourceResponse, error) {
 	if m.ReadResourceFn != nil {
 		return m.ReadResourceFn(ctx, req)
 	}
-	return &rpc.TerraformReadResourceResponse{
+	return &rpc.KolumnReadResourceResponse{
 		Success:  true,
 		NewState: req.CurrentState,
 	}, nil

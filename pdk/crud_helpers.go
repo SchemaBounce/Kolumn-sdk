@@ -14,7 +14,7 @@ import (
 
 // ResourceHandler defines the interface that provider developers implement
 // for each resource type. The SDK handles all the RPC plumbing.
-// This interface supports both the original simplified operations and Terraform-compatible operations.
+// This interface supports both the original simplified operations and Kolumn-compatible operations.
 type ResourceHandler interface {
 	// =====================================================
 	// ORIGINAL SIMPLIFIED CRUD OPERATIONS
@@ -35,32 +35,32 @@ type ResourceHandler interface {
 	Validate(ctx context.Context, req *ValidateRequest) (*ValidateResponse, error)
 }
 
-// TerraformCompatibleResourceHandler extends ResourceHandler with Terraform-compatible methods
-// Providers can optionally implement this interface for enhanced Terraform compatibility
-type TerraformCompatibleResourceHandler interface {
+// KolumnCompatibleResourceHandler extends ResourceHandler with Kolumn-compatible methods
+// Providers can optionally implement this interface for enhanced Kolumn compatibility
+type KolumnCompatibleResourceHandler interface {
 	ResourceHandler // Embed the original interface
 
 	// =====================================================
-	// TERRAFORM-COMPATIBLE OPERATIONS (OPTIONAL)
+	// KOLUMN-COMPATIBLE OPERATIONS (OPTIONAL)
 	// =====================================================
 
-	// ValidateConfig validates resource configuration (Terraform-style)
-	ValidateConfig(ctx context.Context, req *TerraformValidateConfigRequest) (*TerraformValidateConfigResponse, error)
+	// ValidateConfig validates resource configuration (Kolumn-style)
+	ValidateConfig(ctx context.Context, req *KolumnValidateConfigRequest) (*KolumnValidateConfigResponse, error)
 
 	// PlanChange compares desired vs current state and returns planned changes
-	PlanChange(ctx context.Context, req *TerraformPlanChangeRequest) (*TerraformPlanChangeResponse, error)
+	PlanChange(ctx context.Context, req *KolumnPlanChangeRequest) (*KolumnPlanChangeResponse, error)
 
 	// ApplyChange executes planned changes and returns new state
-	ApplyChange(ctx context.Context, req *TerraformApplyChangeRequest) (*TerraformApplyChangeResponse, error)
+	ApplyChange(ctx context.Context, req *KolumnApplyChangeRequest) (*KolumnApplyChangeResponse, error)
 
 	// RefreshState refreshes resource state from the actual system
-	RefreshState(ctx context.Context, req *TerraformRefreshStateRequest) (*TerraformRefreshStateResponse, error)
+	RefreshState(ctx context.Context, req *KolumnRefreshStateRequest) (*KolumnRefreshStateResponse, error)
 
 	// ImportState converts existing resources into managed state
-	ImportState(ctx context.Context, req *TerraformImportStateRequest) (*TerraformImportStateResponse, error)
+	ImportState(ctx context.Context, req *KolumnImportStateRequest) (*KolumnImportStateResponse, error)
 
 	// UpgradeState handles schema version migrations
-	UpgradeState(ctx context.Context, req *TerraformUpgradeStateRequest) (*TerraformUpgradeStateResponse, error)
+	UpgradeState(ctx context.Context, req *KolumnUpgradeStateRequest) (*KolumnUpgradeStateResponse, error)
 }
 
 // OptionalResourceHandler defines optional operations that providers can implement
@@ -438,23 +438,23 @@ type RestoreResponse struct {
 }
 
 // =============================================================================
-// TERRAFORM-COMPATIBLE REQUEST/RESPONSE TYPES FOR SDK
+// KOLUMN-COMPATIBLE REQUEST/RESPONSE TYPES FOR SDK
 // =============================================================================
 
-// TerraformValidateConfigRequest represents Terraform-style validation request
-type TerraformValidateConfigRequest struct {
+// KolumnValidateConfigRequest represents Kolumn-style validation request
+type KolumnValidateConfigRequest struct {
 	ResourceType string                 `json:"resource_type"`
 	Config       map[string]interface{} `json:"config"`
 }
 
-// TerraformValidateConfigResponse represents Terraform-style validation response
-type TerraformValidateConfigResponse struct {
-	Valid       bool                  `json:"valid"`
-	Diagnostics []TerraformDiagnostic `json:"diagnostics,omitempty"`
+// KolumnValidateConfigResponse represents Kolumn-style validation response
+type KolumnValidateConfigResponse struct {
+	Valid       bool                `json:"valid"`
+	Diagnostics []KolumnDiagnostic `json:"diagnostics,omitempty"`
 }
 
-// TerraformPlanChangeRequest represents Terraform-style plan request
-type TerraformPlanChangeRequest struct {
+// KolumnPlanChangeRequest represents Kolumn-style plan request
+type KolumnPlanChangeRequest struct {
 	ResourceType  string                 `json:"resource_type"`
 	PriorState    map[string]interface{} `json:"prior_state,omitempty"`
 	ProposedState map[string]interface{} `json:"proposed_state"`
@@ -462,16 +462,16 @@ type TerraformPlanChangeRequest struct {
 	PriorPrivate  []byte                 `json:"prior_private,omitempty"`
 }
 
-// TerraformPlanChangeResponse represents Terraform-style plan response
-type TerraformPlanChangeResponse struct {
+// KolumnPlanChangeResponse represents Kolumn-style plan response
+type KolumnPlanChangeResponse struct {
 	PlannedState    map[string]interface{} `json:"planned_state"`
 	RequiresReplace []string               `json:"requires_replace,omitempty"`
 	PlannedPrivate  []byte                 `json:"planned_private,omitempty"`
-	Diagnostics     []TerraformDiagnostic  `json:"diagnostics,omitempty"`
+	Diagnostics     []KolumnDiagnostic     `json:"diagnostics,omitempty"`
 }
 
-// TerraformApplyChangeRequest represents Terraform-style apply request
-type TerraformApplyChangeRequest struct {
+// KolumnApplyChangeRequest represents Kolumn-style apply request
+type KolumnApplyChangeRequest struct {
 	ResourceType   string                 `json:"resource_type"`
 	PriorState     map[string]interface{} `json:"prior_state,omitempty"`
 	PlannedState   map[string]interface{} `json:"planned_state"`
@@ -479,61 +479,61 @@ type TerraformApplyChangeRequest struct {
 	PlannedPrivate []byte                 `json:"planned_private,omitempty"`
 }
 
-// TerraformApplyChangeResponse represents Terraform-style apply response
-type TerraformApplyChangeResponse struct {
+// KolumnApplyChangeResponse represents Kolumn-style apply response
+type KolumnApplyChangeResponse struct {
 	NewState    map[string]interface{} `json:"new_state"`
 	Private     []byte                 `json:"private,omitempty"`
-	Diagnostics []TerraformDiagnostic  `json:"diagnostics,omitempty"`
+	Diagnostics []KolumnDiagnostic     `json:"diagnostics,omitempty"`
 }
 
-// TerraformRefreshStateRequest represents Terraform-style refresh request
-type TerraformRefreshStateRequest struct {
+// KolumnRefreshStateRequest represents Kolumn-style refresh request
+type KolumnRefreshStateRequest struct {
 	ResourceType string                 `json:"resource_type"`
 	CurrentState map[string]interface{} `json:"current_state"`
 	Private      []byte                 `json:"private,omitempty"`
 }
 
-// TerraformRefreshStateResponse represents Terraform-style refresh response
-type TerraformRefreshStateResponse struct {
+// KolumnRefreshStateResponse represents Kolumn-style refresh response
+type KolumnRefreshStateResponse struct {
 	NewState    map[string]interface{} `json:"new_state"`
 	Private     []byte                 `json:"private,omitempty"`
-	Diagnostics []TerraformDiagnostic  `json:"diagnostics,omitempty"`
+	Diagnostics []KolumnDiagnostic     `json:"diagnostics,omitempty"`
 }
 
-// TerraformImportStateRequest represents Terraform-style import request
-type TerraformImportStateRequest struct {
+// KolumnImportStateRequest represents Kolumn-style import request
+type KolumnImportStateRequest struct {
 	ResourceType string `json:"resource_type"`
 	ID           string `json:"id"`
 }
 
-// TerraformImportStateResponse represents Terraform-style import response
-type TerraformImportStateResponse struct {
-	ImportedResources []TerraformImportedResource `json:"imported_resources"`
-	Diagnostics       []TerraformDiagnostic       `json:"diagnostics,omitempty"`
+// KolumnImportStateResponse represents Kolumn-style import response
+type KolumnImportStateResponse struct {
+	ImportedResources []KolumnImportedResource `json:"imported_resources"`
+	Diagnostics       []KolumnDiagnostic       `json:"diagnostics,omitempty"`
 }
 
-// TerraformImportedResource represents an imported resource
-type TerraformImportedResource struct {
+// KolumnImportedResource represents an imported resource
+type KolumnImportedResource struct {
 	ResourceType string                 `json:"resource_type"`
 	State        map[string]interface{} `json:"state"`
 	Private      []byte                 `json:"private,omitempty"`
 }
 
-// TerraformUpgradeStateRequest represents Terraform-style upgrade request
-type TerraformUpgradeStateRequest struct {
+// KolumnUpgradeStateRequest represents Kolumn-style upgrade request
+type KolumnUpgradeStateRequest struct {
 	ResourceType string                 `json:"resource_type"`
 	Version      int64                  `json:"version"`
 	RawState     map[string]interface{} `json:"raw_state"`
 }
 
-// TerraformUpgradeStateResponse represents Terraform-style upgrade response
-type TerraformUpgradeStateResponse struct {
+// KolumnUpgradeStateResponse represents Kolumn-style upgrade response
+type KolumnUpgradeStateResponse struct {
 	UpgradedState map[string]interface{} `json:"upgraded_state"`
-	Diagnostics   []TerraformDiagnostic  `json:"diagnostics,omitempty"`
+	Diagnostics   []KolumnDiagnostic     `json:"diagnostics,omitempty"`
 }
 
-// TerraformDiagnostic represents a Terraform-style diagnostic message
-type TerraformDiagnostic struct {
+// KolumnDiagnostic represents a Kolumn-style diagnostic message
+type KolumnDiagnostic struct {
 	Severity  string                 `json:"severity"` // "error", "warning", "info"
 	Summary   string                 `json:"summary"`
 	Detail    string                 `json:"detail,omitempty"`

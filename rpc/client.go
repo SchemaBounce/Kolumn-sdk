@@ -130,7 +130,7 @@ func (c *ProviderClient) Close() error {
 }
 
 // =============================================================================
-// TERRAFORM-COMPATIBLE METHOD IMPLEMENTATIONS
+// KOLUMN-COMPATIBLE METHOD IMPLEMENTATIONS
 // =============================================================================
 
 // ValidateProviderConfig implements UniversalProvider
@@ -215,7 +215,7 @@ func (c *ProviderClient) ApplyResourceChange(ctx context.Context, req *ApplyReso
 }
 
 // ReadResource implements UniversalProvider
-func (c *ProviderClient) ReadResource(ctx context.Context, req *TerraformReadResourceRequest) (*TerraformReadResourceResponse, error) {
+func (c *ProviderClient) ReadResource(ctx context.Context, req *KolumnReadResourceRequest) (*KolumnReadResourceResponse, error) {
 	input, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
@@ -226,7 +226,7 @@ func (c *ProviderClient) ReadResource(ctx context.Context, req *TerraformReadRes
 		return nil, err
 	}
 
-	var resp TerraformReadResourceResponse
+	var resp KolumnReadResourceResponse
 	if err := json.Unmarshal(output, &resp); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}

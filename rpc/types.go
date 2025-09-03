@@ -288,7 +288,7 @@ type RetryPolicy struct {
 }
 
 // =============================================================================
-// TERRAFORM-COMPATIBLE REQUEST/RESPONSE TYPES
+// KOLUMN-COMPATIBLE REQUEST/RESPONSE TYPES
 // =============================================================================
 
 // ValidateProviderConfigRequest validates provider configuration
@@ -355,15 +355,15 @@ type ApplyResourceChangeResponse struct {
 	Error            *RPCError              `json:"error,omitempty"`
 }
 
-// TerraformReadResourceRequest requests reading resource state (Terraform-compatible)
-type TerraformReadResourceRequest struct {
+// KolumnReadResourceRequest requests reading resource state (Kolumn-compatible)
+type KolumnReadResourceRequest struct {
 	ResourceType string                 `json:"resource_type"`
 	CurrentState map[string]interface{} `json:"current_state"`
 	Private      []byte                 `json:"private,omitempty"`
 }
 
-// TerraformReadResourceResponse returns current resource state (Terraform-compatible)
-type TerraformReadResourceResponse struct {
+// KolumnReadResourceResponse returns current resource state (Kolumn-compatible)
+type KolumnReadResourceResponse struct {
 	Success     bool                   `json:"success"`
 	NewState    map[string]interface{} `json:"new_state"`
 	Private     []byte                 `json:"private,omitempty"`

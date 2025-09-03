@@ -165,7 +165,7 @@ func (p *BaseProvider) Close() error {
 }
 
 // =============================================================================
-// TERRAFORM-COMPATIBLE METHOD IMPLEMENTATIONS
+// KOLUMN-COMPATIBLE METHOD IMPLEMENTATIONS
 // =============================================================================
 
 // ValidateProviderConfig implements rpc.UniversalProvider
@@ -198,15 +198,15 @@ func (p *BaseProvider) ValidateResourceConfig(ctx context.Context, req *rpc.Vali
 		}, nil
 	}
 
-	// Check if handler supports Terraform-compatible validation
-	if terraformHandler, ok := handler.(TerraformCompatibleResourceHandler); ok {
-		// Use Terraform-compatible validation
-		tfReq := &TerraformValidateConfigRequest{
+	// Check if handler supports Kolumn-compatible validation
+	if kolumnHandler, ok := handler.(KolumnCompatibleResourceHandler); ok {
+		// Use Kolumn-compatible validation
+		tfReq := &KolumnValidateConfigRequest{
 			ResourceType: req.ResourceType,
 			Config:       req.Config,
 		}
 
-		tfResp, err := terraformHandler.ValidateConfig(ctx, tfReq)
+		tfResp, err := kolumnHandler.ValidateConfig(ctx, tfReq)
 		if err != nil {
 			return &rpc.ValidateResourceConfigResponse{
 				Success: false,
@@ -217,7 +217,7 @@ func (p *BaseProvider) ValidateResourceConfig(ctx context.Context, req *rpc.Vali
 			}, nil
 		}
 
-		// Convert Terraform diagnostics to RPC format
+		// Convert Kolumn diagnostics to RPC format
 		var diagnostics []rpc.Diagnostic
 		for _, d := range tfResp.Diagnostics {
 			diagnostics = append(diagnostics, rpc.Diagnostic{
@@ -287,10 +287,10 @@ func (p *BaseProvider) PlanResourceChange(ctx context.Context, req *rpc.PlanReso
 		}, nil
 	}
 
-	// Check if handler supports Terraform-compatible planning
-	if terraformHandler, ok := handler.(TerraformCompatibleResourceHandler); ok {
-		// Use Terraform-compatible planning
-		tfReq := &TerraformPlanChangeRequest{
+	// Check if handler supports Kolumn-compatible planning
+	if kolumnHandler, ok := handler.(KolumnCompatibleResourceHandler); ok {
+		// Use Kolumn-compatible planning
+		tfReq := &KolumnPlanChangeRequest{
 			ResourceType:  req.ResourceType,
 			PriorState:    req.PriorState,
 			ProposedState: req.ProposedNewState,
@@ -298,7 +298,7 @@ func (p *BaseProvider) PlanResourceChange(ctx context.Context, req *rpc.PlanReso
 			PriorPrivate:  req.PriorPrivate,
 		}
 
-		tfResp, err := terraformHandler.PlanChange(ctx, tfReq)
+		tfResp, err := kolumnHandler.PlanChange(ctx, tfReq)
 		if err != nil {
 			return &rpc.PlanResourceChangeResponse{
 				Success: false,
@@ -309,7 +309,7 @@ func (p *BaseProvider) PlanResourceChange(ctx context.Context, req *rpc.PlanReso
 			}, nil
 		}
 
-		// Convert Terraform diagnostics to RPC format
+		// Convert Kolumn diagnostics to RPC format
 		var diagnostics []rpc.Diagnostic
 		for _, d := range tfResp.Diagnostics {
 			diagnostics = append(diagnostics, rpc.Diagnostic{
@@ -383,10 +383,10 @@ func (p *BaseProvider) ApplyResourceChange(ctx context.Context, req *rpc.ApplyRe
 		}, nil
 	}
 
-	// Check if handler supports Terraform-compatible apply
-	if terraformHandler, ok := handler.(TerraformCompatibleResourceHandler); ok {
-		// Use Terraform-compatible apply
-		tfReq := &TerraformApplyChangeRequest{
+	// Check if handler supports Kolumn-compatible apply
+	if kolumnHandler, ok := handler.(KolumnCompatibleResourceHandler); ok {
+		// Use Kolumn-compatible apply
+		tfReq := &KolumnApplyChangeRequest{
 			ResourceType:   req.ResourceType,
 			PriorState:     req.PriorState,
 			PlannedState:   req.PlannedState,
@@ -394,7 +394,7 @@ func (p *BaseProvider) ApplyResourceChange(ctx context.Context, req *rpc.ApplyRe
 			PlannedPrivate: req.PlannedPrivate,
 		}
 
-		tfResp, err := terraformHandler.ApplyChange(ctx, tfReq)
+		tfResp, err := kolumnHandler.ApplyChange(ctx, tfReq)
 		if err != nil {
 			return &rpc.ApplyResourceChangeResponse{
 				Success: false,
@@ -405,7 +405,7 @@ func (p *BaseProvider) ApplyResourceChange(ctx context.Context, req *rpc.ApplyRe
 			}, nil
 		}
 
-		// Convert Terraform diagnostics to RPC format
+		// Convert Kolumn diagnostics to RPC format
 		var diagnostics []rpc.Diagnostic
 		for _, d := range tfResp.Diagnostics {
 			diagnostics = append(diagnostics, rpc.Diagnostic{
@@ -525,10 +525,10 @@ func (p *BaseProvider) ApplyResourceChange(ctx context.Context, req *rpc.ApplyRe
 }
 
 // ReadResource implements rpc.UniversalProvider
-func (p *BaseProvider) ReadResource(ctx context.Context, req *rpc.TerraformReadResourceRequest) (*rpc.TerraformReadResourceResponse, error) {
+func (p *BaseProvider) ReadResource(ctx context.Context, req *rpc.KolumnReadResourceRequest) (*rpc.KolumnReadResourceResponse, error) {
 	handler, exists := p.resourceHandlers[req.ResourceType]
 	if !exists {
-		return &rpc.TerraformReadResourceResponse{
+		return &rpc.KolumnReadResourceResponse{
 			Success: false,
 			Error: &rpc.RPCError{
 				Code:    "UNKNOWN_RESOURCE_TYPE",
@@ -537,18 +537,18 @@ func (p *BaseProvider) ReadResource(ctx context.Context, req *rpc.TerraformReadR
 		}, nil
 	}
 
-	// Check if handler supports Terraform-compatible refresh
-	if terraformHandler, ok := handler.(TerraformCompatibleResourceHandler); ok {
-		// Use Terraform-compatible refresh
-		tfReq := &TerraformRefreshStateRequest{
+	// Check if handler supports Kolumn-compatible refresh
+	if kolumnHandler, ok := handler.(KolumnCompatibleResourceHandler); ok {
+		// Use Kolumn-compatible refresh
+		tfReq := &KolumnRefreshStateRequest{
 			ResourceType: req.ResourceType,
 			CurrentState: req.CurrentState,
 			Private:      req.Private,
 		}
 
-		tfResp, err := terraformHandler.RefreshState(ctx, tfReq)
+		tfResp, err := kolumnHandler.RefreshState(ctx, tfReq)
 		if err != nil {
-			return &rpc.TerraformReadResourceResponse{
+			return &rpc.KolumnReadResourceResponse{
 				Success: false,
 				Error: &rpc.RPCError{
 					Code:    "READ_ERROR",
@@ -557,7 +557,7 @@ func (p *BaseProvider) ReadResource(ctx context.Context, req *rpc.TerraformReadR
 			}, nil
 		}
 
-		// Convert Terraform diagnostics to RPC format
+		// Convert Kolumn diagnostics to RPC format
 		var diagnostics []rpc.Diagnostic
 		for _, d := range tfResp.Diagnostics {
 			diagnostics = append(diagnostics, rpc.Diagnostic{
@@ -568,7 +568,7 @@ func (p *BaseProvider) ReadResource(ctx context.Context, req *rpc.TerraformReadR
 			})
 		}
 
-		return &rpc.TerraformReadResourceResponse{
+		return &rpc.KolumnReadResourceResponse{
 			Success:     true,
 			NewState:    tfResp.NewState,
 			Private:     tfResp.Private,
@@ -589,7 +589,7 @@ func (p *BaseProvider) ReadResource(ctx context.Context, req *rpc.TerraformReadR
 
 	sdkResp, err := handler.Read(ctx, sdkReq)
 	if err != nil {
-		return &rpc.TerraformReadResourceResponse{
+		return &rpc.KolumnReadResourceResponse{
 			Success: false,
 			Error: &rpc.RPCError{
 				Code:    "READ_ERROR",
@@ -600,13 +600,13 @@ func (p *BaseProvider) ReadResource(ctx context.Context, req *rpc.TerraformReadR
 
 	if sdkResp.NotFound {
 		// Resource no longer exists
-		return &rpc.TerraformReadResourceResponse{
+		return &rpc.KolumnReadResourceResponse{
 			Success:  true,
 			NewState: make(map[string]interface{}), // Empty state indicates resource is gone
 		}, nil
 	}
 
-	return &rpc.TerraformReadResourceResponse{
+	return &rpc.KolumnReadResourceResponse{
 		Success:  true,
 		NewState: sdkResp.State,
 	}, nil
@@ -625,15 +625,15 @@ func (p *BaseProvider) ImportResourceState(ctx context.Context, req *rpc.ImportR
 		}, nil
 	}
 
-	// Check if handler supports Terraform-compatible import
-	if terraformHandler, ok := handler.(TerraformCompatibleResourceHandler); ok {
-		// Use Terraform-compatible import
-		tfReq := &TerraformImportStateRequest{
+	// Check if handler supports Kolumn-compatible import
+	if kolumnHandler, ok := handler.(KolumnCompatibleResourceHandler); ok {
+		// Use Kolumn-compatible import
+		tfReq := &KolumnImportStateRequest{
 			ResourceType: req.ResourceType,
 			ID:           req.ID,
 		}
 
-		tfResp, err := terraformHandler.ImportState(ctx, tfReq)
+		tfResp, err := kolumnHandler.ImportState(ctx, tfReq)
 		if err != nil {
 			return &rpc.ImportResourceStateResponse{
 				Success: false,
@@ -644,7 +644,7 @@ func (p *BaseProvider) ImportResourceState(ctx context.Context, req *rpc.ImportR
 			}, nil
 		}
 
-		// Convert Terraform imported resources to RPC format
+		// Convert Kolumn imported resources to RPC format
 		var importedResources []rpc.ImportedResource
 		for _, res := range tfResp.ImportedResources {
 			importedResources = append(importedResources, rpc.ImportedResource{
@@ -654,7 +654,7 @@ func (p *BaseProvider) ImportResourceState(ctx context.Context, req *rpc.ImportR
 			})
 		}
 
-		// Convert Terraform diagnostics to RPC format
+		// Convert Kolumn diagnostics to RPC format
 		var diagnostics []rpc.Diagnostic
 		for _, d := range tfResp.Diagnostics {
 			diagnostics = append(diagnostics, rpc.Diagnostic{
@@ -704,17 +704,17 @@ func (p *BaseProvider) ImportResourceState(ctx context.Context, req *rpc.ImportR
 
 // UpgradeResourceState implements rpc.UniversalProvider
 func (p *BaseProvider) UpgradeResourceState(ctx context.Context, req *rpc.UpgradeResourceStateRequest) (*rpc.UpgradeResourceStateResponse, error) {
-	// Check if handler supports Terraform-compatible upgrade
+	// Check if handler supports Kolumn-compatible upgrade
 	if handler, exists := p.resourceHandlers[req.ResourceType]; exists {
-		if terraformHandler, ok := handler.(TerraformCompatibleResourceHandler); ok {
-			// Use Terraform-compatible upgrade
-			tfReq := &TerraformUpgradeStateRequest{
+		if kolumnHandler, ok := handler.(KolumnCompatibleResourceHandler); ok {
+			// Use Kolumn-compatible upgrade
+			tfReq := &KolumnUpgradeStateRequest{
 				ResourceType: req.ResourceType,
 				Version:      req.Version,
 				RawState:     req.RawState,
 			}
 
-			tfResp, err := terraformHandler.UpgradeState(ctx, tfReq)
+			tfResp, err := kolumnHandler.UpgradeState(ctx, tfReq)
 			if err != nil {
 				return &rpc.UpgradeResourceStateResponse{
 					Success: false,
@@ -725,7 +725,7 @@ func (p *BaseProvider) UpgradeResourceState(ctx context.Context, req *rpc.Upgrad
 				}, nil
 			}
 
-			// Convert Terraform diagnostics to RPC format
+			// Convert Kolumn diagnostics to RPC format
 			var diagnostics []rpc.Diagnostic
 			for _, d := range tfResp.Diagnostics {
 				diagnostics = append(diagnostics, rpc.Diagnostic{

@@ -9,7 +9,7 @@ import (
 )
 
 // UniversalProvider defines the interface that all providers must implement
-// This combines both the simplified 4-method interface and Terraform-compatible methods
+// This combines both the simplified 4-method interface and enhanced resource management methods
 type UniversalProvider interface {
 	// =====================================================
 	// ORIGINAL SIMPLIFIED INTERFACE (4 methods)
@@ -28,7 +28,7 @@ type UniversalProvider interface {
 	Close() error
 
 	// =====================================================
-	// TERRAFORM-COMPATIBLE METHODS (7 new methods)
+	// KOLUMN-COMPATIBLE METHODS (7 new methods)
 	// =====================================================
 
 	// ValidateProviderConfig validates provider configuration before Configure
@@ -44,7 +44,7 @@ type UniversalProvider interface {
 	ApplyResourceChange(ctx context.Context, req *ApplyResourceChangeRequest) (*ApplyResourceChangeResponse, error)
 
 	// ReadResource refreshes resource state from the actual system
-	ReadResource(ctx context.Context, req *TerraformReadResourceRequest) (*TerraformReadResourceResponse, error)
+	ReadResource(ctx context.Context, req *KolumnReadResourceRequest) (*KolumnReadResourceResponse, error)
 
 	// ImportResourceState converts existing resources into Kolumn state
 	ImportResourceState(ctx context.Context, req *ImportResourceStateRequest) (*ImportResourceStateResponse, error)

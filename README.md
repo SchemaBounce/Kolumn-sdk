@@ -140,9 +140,6 @@ Instead of resource-specific methods, providers declare supported functions:
 - `UniversalState` - Cross-provider state format
 - `UniversalMetadata` - Metadata type definitions
 
-### `state` - State Management
-- `StateAdapter` interface for state backends
-- State serialization utilities
 
 ### `metadata` - Metadata System
 - Collector interfaces for metadata extraction
