@@ -4,132 +4,170 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is the **Kolumn Provider SDK** - a Go SDK for building external providers that integrate with Kolumn's infrastructure-as-code platform. The SDK enables developers to create RPC-based plugins for database, storage, streaming, and other data stack technologies.
+This is the **Kolumn Provider SDK** - a Go SDK library for building external providers that integrate with Kolumn's infrastructure-as-code platform. The SDK follows Go best practices (like AWS SDK and other provider SDKs) as a **library**, not an application framework.
 
-## Development Commands
+## Key Architecture Principles
 
-### Building and Testing
-```bash
-# Build the SDK
-make build
+### 1. **Library Pattern** (Not RPC Plugins)
+- This SDK is imported as a Go library
+- Provider developers create their own binaries and main.go files
+- No cmd/ directories or main.go files in the SDK itself
+- Follows standard Go SDK patterns (AWS SDK, HashiCorp Provider SDK, etc.)
 
-# Run all tests
-make test
+### 2. **Simple Interface Design**
+- Single 4-method `Provider` interface (clean and minimal)
+- Documentation generated from `Schema()` method over RPC
 
-# Run tests with coverage
-make test-coverage
+### 3. **Create/Discover Object Categorization**
+- **CREATE objects**: Resources providers can create and manage (tables, buckets, topics)
+- **DISCOVER objects**: Existing infrastructure providers can find and analyze (schemas, performance issues)
 
-# Format code
-make fmt
+### 4. **Clean Package Structure**
+- `core/` - Core interfaces and types
+- `create/` - CREATE object handler utilities
+- `discover/` - DISCOVER object handler utilities  
+- `examples/` - Usage examples and patterns
 
-# Run linting
-make lint
+## Core Interface
 
-# Run go vet
-make vet
-
-# Full validation (clean, deps, build, test, lint, vet, examples)
-make validate
-
-# Build examples
-make examples
-```
-
-### Development Workflow
-```bash
-# Setup development environment (installs required tools)
-make dev-setup
-
-# Development build and test
-make dev
-
-# Watch for changes and run tests automatically
-make watch
-
-# CI validation pipeline
-make ci
-```
-
-### Dependencies
-```bash
-# Download and verify dependencies
-make deps
-```
-
-## Architecture
-
-### Core Components
-
-1. **RPC Plugin System** (`rpc/`) - ✅ Correct for provider SDK
-   - `UniversalProvider` interface - Universal 4-method + 7 Kolumn-compatible methods
-   - Plugin serving infrastructure via `rpc.ServeProvider()`
-   - Both simplified and Kolumn-compatible method sets
-
-2. **Provider Development Kit** (`pdk/`) - ✅ Correct for provider SDK
-   - `BaseProvider` - Handles RPC plumbing and automatic CRUD dispatch
-   - Resource handler registration system
-   - Helper functions for validation, configuration parsing
-   - Automatic function-to-handler routing
-
-3. **Type System** (`types/`) - Shared types across providers
-   - `ProviderSchema` - Provider capability declarations
-   - `UniversalState` - Cross-provider state format
-   - Configuration schema definitions
-
-4. **Metadata System** (`metadata/`) - Data discovery and lineage
-   - Metadata collection interfaces
-   - Schema introspection support
-
-### Provider Interface Pattern
-
-Providers implement the `UniversalProvider` interface with 11 total methods:
-
-**Core 4-method interface:**
-- `Configure()` - Provider setup
-- `GetSchema()` - Capability declaration
-- `CallFunction()` - Function dispatch
-- `Close()` - Cleanup
-
-**Kolumn-compatible methods (7):**
-- `ValidateProviderConfig()`, `ValidateResourceConfig()`
-- `PlanResourceChange()`, `ApplyResourceChange()`
-- `ReadResource()`, `ImportResourceState()`, `UpgradeResourceState()`
-
-### Resource Handler Architecture
-
-Providers register resource handlers with `BaseProvider`:
-
+### Provider Interface
 ```go
-provider.RegisterResourceHandler("table", &TableHandler{})
+type Provider interface {
+    Configure(ctx context.Context, config Config) error
+    Schema() (*Schema, error)
+    CallFunction(ctx context.Context, function string, input []byte) ([]byte, error)
+    Close() error
+}
 ```
 
-Handlers implement the `ResourceHandler` interface for CRUD operations.
+The `Schema()` method returns all information needed for documentation generation over RPC.
 
-## Key Files
+## Handler Registry Pattern
 
-- `pdk/provider_base.go` - Core provider implementation with automatic RPC handling
-- `rpc/provider.go` - Universal provider interface definitions
-- `examples/simple_provider.go` - Complete working provider example
-- `cmd/simple_example/main.go` - Example provider binary
-- `types/schema.go` - Schema and configuration type definitions
+### CREATE Object Handlers
+```go
+// CREATE objects implement CRUD operations
+type ObjectHandler interface {
+    Create(ctx context.Context, req *CreateRequest) (*CreateResponse, error)
+    Read(ctx context.Context, req *ReadRequest) (*ReadResponse, error)
+    Update(ctx context.Context, req *UpdateRequest) (*UpdateResponse, error)
+    Delete(ctx context.Context, req *DeleteRequest) (*DeleteResponse, error)
+    Plan(ctx context.Context, req *PlanRequest) (*PlanResponse, error)
+}
+
+// Register with CREATE registry
+createRegistry := create.NewRegistry()
+createRegistry.RegisterHandler("table", tableHandler, tableSchema)
+```
+
+### DISCOVER Object Handlers
+```go
+// DISCOVER objects implement discovery operations
+type ObjectHandler interface {
+    Scan(ctx context.Context, req *ScanRequest) (*ScanResponse, error)
+    Analyze(ctx context.Context, req *AnalyzeRequest) (*AnalyzeResponse, error)
+    Query(ctx context.Context, req *QueryRequest) (*QueryResponse, error)
+}
+
+// Register with DISCOVER registry  
+discoverRegistry := discover.NewRegistry()
+discoverRegistry.RegisterHandler("existing_tables", discoverer, discoverySchema)
+```
+
+## File Organization
+
+### Core SDK Files
+- `core/provider.go` (229 lines) - Core interfaces and progressive disclosure pattern
+- `create/handler.go` (305 lines) - CREATE object handler interface and registry
+- `discover/handler.go` (414 lines) - DISCOVER object handler interface and registry  
+
+### Examples
+- `examples/simple/provider.go` (510 lines) - Complete minimal provider demonstrating all SDK concepts
+- `examples/simple/README.md` - Detailed explanation of patterns
+
+### Documentation  
+- `README.md` - Main SDK documentation for provider developers
+- `CLAUDE.md` - This file (development guidance)
+
+## Development Workflow
+
+### Building the SDK
+```bash
+go build ./...
+go test ./...
+go mod tidy
+```
+
+### Testing Examples
+```bash
+cd examples/simple
+go run provider.go
+```
+
+### Schema for Documentation
+```go
+// The Schema() method provides all documentation information
+schema, err := provider.Schema()
+// Schema contains CreateObjects, DiscoverObjects, examples, etc.
+// Kolumn CLI calls this over RPC for documentation generation
+```
 
 ## Provider Development Pattern
 
-1. Extend `BaseProvider` from `pdk` package
-2. Register resource handlers for each resource type
-3. Implement CRUD operations in handlers
-4. Use `rpc.ServeProvider()` to serve as plugin
-5. Build as binary: `go build -o kolumn-provider-name`
+1. **Create provider project**: `mkdir kolumn-provider-name`
+2. **Import SDK**: `go get github.com/schemabounce/kolumn/sdk`
+3. **Implement Provider interface**: Start with 4-method interface
+4. **Register object handlers**: Use create/discover registries
+5. **Build provider binary**: `go build -o kolumn-provider-name`
 
-## Testing
+## Important Notes for Development
 
-- Use `make test` for full test suite
-- Test files follow `*_test.go` convention
-- Coverage reports generated in `build/coverage.html`
-- Examples are validated during CI via `make examples`
+### ✅ **Correct Patterns** (Follow These)
+- SDK as Go library (import with `go get`)
+- Simple 4-method Provider interface
+- Create/discover object categorization
+- Handler registration pattern
+- Schema() method for documentation over RPC
+- Provider creates own main.go in separate project
+
+### ❌ **Incorrect Patterns** (Avoid These)
+- RPC plugin architecture with HashiCorp go-plugin
+- cmd/ directories in SDK with main.go files
+- Function-based dispatch instead of object handlers
+- SDKs that contain application binaries
+- Monolithic interfaces with many required methods
+
+## Documentation Philosophy
+
+Documentation is generated from the `Schema()` method over RPC:
+
+- **Schema-driven** - All documentation comes from provider's Schema() method
+- **Create/discover categorization** of all object types  
+- **Rich object definitions** with properties, examples, and validation
+- **RPC-based generation** - Kolumn CLI calls Schema() to generate docs
+
+## Testing Strategy
+
+- Unit tests for all core interfaces
+- Integration tests for registries and handlers
+- Example validation to ensure patterns work
+- Schema() method testing for documentation completeness
 
 ## Dependencies
 
-- **HashiCorp go-plugin** - RPC plugin framework
-- **Testify** - Testing framework  
-- **Go 1.24+** - Required Go version
+- **Standard library only** for core functionality
+- **Minimal external dependencies** following Go best practices
+- **No RPC frameworks** (HashiCorp go-plugin removed)
+- **Clean module structure** with clear dependency boundaries
+
+This SDK enables clean, maintainable provider development following Go SDK best practices while providing powerful abstractions for the create/discover pattern and schema-driven documentation.
+
+## IMPORTANT RESTRICTIONS
+
+⚠️ **TERRAFORM REFERENCES PROHIBITED** ⚠️
+- The word "terraform" or "Terraform" is **BANNED** from all code, documentation, comments, and examples
+- This includes variable names, function names, package names, and any text content
+- Use alternative terms: "infrastructure-as-code", "IaC", "configuration management", "provider SDK"
+- When referencing similar tools, use "HashiCorp Provider SDK" or "infrastructure tools"
+
+This restriction is critical to maintain product independence and avoid trademark/brand conflicts.
