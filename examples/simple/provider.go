@@ -42,27 +42,26 @@ func NewSimpleProvider() *SimpleProvider {
 	return provider
 }
 
-// Configure implements the core.Provider interface with secure logging
-func (p *SimpleProvider) Configure(ctx context.Context, config core.Config) error {
+// Configure implements the core.Provider interface with new core compatibility
+// Updated to accept map[string]interface{} for compatibility with Kolumn core
+func (p *SimpleProvider) Configure(ctx context.Context, config map[string]interface{}) error {
 	// SECURITY: Validate configuration size before processing
-	if simpleConfig, ok := config.(*SimpleConfig); ok {
-		validator := &security.InputSizeValidator{}
-		if err := validator.ValidateConfigSize(simpleConfig.data); err != nil {
-			secErr := security.NewSecureError(
-				"configuration too large",
-				fmt.Sprintf("config validation failed: %v", err),
-				"CONFIG_TOO_LARGE",
-			)
-			return secErr
-		}
+	validator := &security.InputSizeValidator{}
+	if err := validator.ValidateConfigSize(config); err != nil {
+		secErr := security.NewSecureError(
+			"configuration too large",
+			fmt.Sprintf("config validation failed: %v", err),
+			"CONFIG_TOO_LARGE",
+		)
+		return secErr
 	}
 
 	// Validate required configuration
-	endpoint, err := config.GetString("endpoint")
-	if err != nil {
+	endpoint, ok := config["endpoint"].(string)
+	if !ok {
 		secErr := security.NewSecureError(
 			"missing required configuration",
-			fmt.Sprintf("endpoint validation failed: %v", err),
+			"endpoint field is required and must be a string",
 			"MISSING_ENDPOINT",
 		)
 		return secErr
@@ -72,7 +71,8 @@ func (p *SimpleProvider) Configure(ctx context.Context, config core.Config) erro
 	sanitizedEndpoint := sanitizeEndpoint(endpoint)
 	log.Printf("Configuring provider with endpoint: %s", sanitizedEndpoint)
 
-	p.config = config
+	// Create internal config object from map
+	p.config = NewSimpleConfig(config)
 	p.configured = true
 	return nil
 }
@@ -86,177 +86,28 @@ func sanitizeEndpoint(endpoint string) string {
 	return endpoint
 }
 
-// Schema implements the core.Provider interface
+// Schema implements the core.Provider interface with enhanced core compatibility
 func (p *SimpleProvider) Schema() (*core.Schema, error) {
-	return &core.Schema{
-		Name:        "simple",
-		Version:     "1.0.0",
-		Description: "A simple provider demonstrating SDK usage patterns",
-
-		// CREATE objects - resources this provider can create and manage
-		CreateObjects: map[string]*core.ObjectType{
-			"table": {
-				Name:        "table",
-				Description: "Database table that can be created and managed",
-				Type:        core.CREATE,
-				Category:    "database",
-				Properties: map[string]*core.Property{
-					"name": {
-						Type:        "string",
-						Description: "Name of the table",
-					},
-					"columns": {
-						Type:        "list",
-						Description: "List of column definitions",
-					},
-				},
-				Required: []string{"name"},
-				Examples: []*core.ObjectExample{
-					{
-						Name:        "basic_table",
-						Description: "Basic table creation",
-						Config: map[string]interface{}{
-							"name":    "users",
-							"columns": []string{"id", "name", "email"},
-						},
-					},
-				},
-			},
-		},
-
-		// DISCOVER objects - existing infrastructure this provider can find
-		DiscoverObjects: map[string]*core.ObjectType{
-			"existing_tables": {
-				Name:        "existing_tables",
-				Description: "Discover existing database tables",
-				Type:        core.DISCOVER,
-				Category:    "database",
-				Properties: map[string]*core.Property{
-					"schema": {
-						Type:        "string",
-						Description: "Database schema to scan",
-					},
-					"pattern": {
-						Type:        "string",
-						Description: "Table name pattern to match",
-					},
-				},
-				Examples: []*core.ObjectExample{
-					{
-						Name:        "scan_all_tables",
-						Description: "Discover all tables in public schema",
-						Config: map[string]interface{}{
-							"schema":  "public",
-							"pattern": "*",
-						},
-					},
-				},
-			},
-		},
-
-		// Configuration schema
-		ConfigSchema: &core.ConfigSchema{
-			Properties: map[string]*core.Property{
-				"endpoint": {
-					Type:        "string",
-					Description: "Database connection endpoint",
-				},
-				"timeout": {
-					Type:        "integer",
-					Description: "Connection timeout in seconds",
-				},
-			},
-			Required: []string{"endpoint"},
-		},
-	}, nil
+	// Use UnifiedDispatcher to build a core-compatible schema with new fields
+	dispatcher := core.NewUnifiedDispatcher(p.createRegistry, p.discoverRegistry)
+	return dispatcher.BuildCompatibleSchema(
+		"simple",
+		"1.0.0",
+		"database",
+		"A simple provider demonstrating SDK compatibility patterns",
+	), nil
 }
 
-// CallFunction implements the core.Provider interface with comprehensive security
+// CallFunction implements the core.Provider interface with new unified dispatch
+// Updated to handle the new core function names: CreateResource, ReadResource, etc.
 func (p *SimpleProvider) CallFunction(ctx context.Context, function string, input []byte) ([]byte, error) {
 	if !p.configured {
-		secErr := security.NewSecureError(
-			"provider not ready",
-			"provider not configured",
-			"NOT_CONFIGURED",
-		)
-		return nil, secErr
+		return nil, fmt.Errorf("provider not configured")
 	}
 
-	// SECURITY: Validate function name
-	if function == "" {
-		secErr := security.NewSecureError(
-			"invalid request",
-			"function name is empty",
-			"EMPTY_FUNCTION",
-		)
-		return nil, secErr
-	}
-
-	// Parse function call to determine object type and operation with secure unmarshaling
-	var request struct {
-		ObjectType string          `json:"object_type"`
-		Operation  string          `json:"operation"`
-		Data       json.RawMessage `json:"data"`
-	}
-
-	// SECURITY: Use safe unmarshaling with size limits
-	if err := security.SafeUnmarshal(input, &request); err != nil {
-		secErr := security.NewSecureError(
-			"invalid request format",
-			fmt.Sprintf("function call unmarshal failed: %v", err),
-			"INVALID_REQUEST",
-		)
-		return nil, secErr
-	}
-
-	// SECURITY: Validate object type and operation
-	if err := security.ValidateObjectType(request.ObjectType); err != nil {
-		secErr := security.NewSecureError(
-			"invalid object type",
-			fmt.Sprintf("object type validation failed: %v", err),
-			"INVALID_OBJECT_TYPE",
-		)
-		return nil, secErr
-	}
-
-	if err := security.ValidateMethod(request.Operation); err != nil {
-		secErr := security.NewSecureError(
-			"operation not supported",
-			fmt.Sprintf("operation validation failed: %v", err),
-			"INVALID_OPERATION",
-		)
-		return nil, secErr
-	}
-
-	// Route to appropriate handler based on object type with secure error handling
-	switch request.Operation {
-	case "create", "read", "update", "delete", "plan":
-		// CREATE object operations
-		result, err := p.createRegistry.CallHandler(ctx, request.ObjectType, request.Operation, request.Data)
-		if err != nil {
-			// Error is already a SecureError from the registry
-			return nil, err
-		}
-		return result, nil
-
-	case "scan", "analyze", "query":
-		// DISCOVER object operations
-		result, err := p.discoverRegistry.CallHandler(ctx, request.ObjectType, request.Operation, request.Data)
-		if err != nil {
-			// Error is already a SecureError from the registry
-			return nil, err
-		}
-		return result, nil
-
-	default:
-		// This should never be reached due to validation above
-		secErr := security.NewSecureError(
-			"operation not supported",
-			fmt.Sprintf("unexpected operation: %s", request.Operation),
-			"UNEXPECTED_OPERATION",
-		)
-		return nil, secErr
-	}
+	// Use UnifiedDispatcher to handle the new core function dispatch pattern
+	dispatcher := core.NewUnifiedDispatcher(p.createRegistry, p.discoverRegistry)
+	return dispatcher.Dispatch(ctx, function, input)
 }
 
 // Close implements the core.Provider interface
@@ -485,11 +336,11 @@ func main() {
 	// Create a provider using the SDK
 	provider := NewSimpleProvider()
 
-	// Example: Configure the provider
-	config := NewSimpleConfig(map[string]interface{}{
+	// Example: Configure the provider with new map[string]interface{} pattern
+	config := map[string]interface{}{
 		"endpoint": "postgresql://localhost:5432/mydb",
 		"timeout":  30,
-	})
+	}
 
 	ctx := context.Background()
 	if err := provider.Configure(ctx, config); err != nil {
@@ -503,12 +354,39 @@ func main() {
 	}
 
 	log.Printf("Provider: %s v%s", schema.Name, schema.Version)
-	log.Printf("CREATE objects: %d", len(schema.CreateObjects))
-	log.Printf("DISCOVER objects: %d", len(schema.DiscoverObjects))
+	log.Printf("Supported functions: %v", schema.SupportedFunctions)
+	log.Printf("Resource types: %d", len(schema.ResourceTypes))
 
-	// In a real implementation, you would serve this provider via RPC
-	// For this example, we just demonstrate the patterns
-	log.Println("Provider example completed successfully!")
+	// Test the new unified dispatch pattern
+	log.Println("\nTesting unified dispatch pattern...")
+
+	// Test CreateResource function (new core pattern)
+	createRequest := map[string]interface{}{
+		"resource_type": "table",
+		"name":          "test_table",
+		"config": map[string]interface{}{
+			"name":    "test_table",
+			"columns": []string{"id", "name"},
+		},
+	}
+
+	requestJSON, _ := json.Marshal(createRequest)
+	response, err := provider.CallFunction(ctx, "CreateResource", requestJSON)
+	if err != nil {
+		log.Printf("CreateResource test failed: %v", err)
+	} else {
+		log.Printf("CreateResource test succeeded: %s", string(response))
+	}
+
+	// Test Ping function (new core pattern)
+	pingResponse, err := provider.CallFunction(ctx, "Ping", []byte("{}"))
+	if err != nil {
+		log.Printf("Ping test failed: %v", err)
+	} else {
+		log.Printf("Ping test succeeded: %s", string(pingResponse))
+	}
+
+	log.Println("\nSDK compatibility demonstration completed successfully!")
 }
 
 // SimpleConfig implements the core.Config interface for this example
