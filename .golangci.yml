@@ -1,0 +1,256 @@
+# GolangCI-Lint configuration for Kolumn SDK
+# https://golangci-lint.run/usage/configuration/
+
+run:
+  timeout: 10m
+  tests: true
+  modules-download-mode: readonly
+  allow-parallel-runners: true
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  uniq-by-line: true
+  sort-results: true
+
+linters-settings:
+  # Error detection
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+    exclude-functions:
+      - fmt.Print
+      - fmt.Println
+      - fmt.Printf
+
+  # Ineffective assignments
+  ineffassign:
+    check-exported: true
+
+  # Unused code
+  unused:
+    check-exported: false
+
+  # Code complexity
+  gocyclo:
+    min-complexity: 15
+
+  # Function length
+  funlen:
+    lines: 100
+    statements: 50
+
+  # Cognitive complexity
+  gocognit:
+    min-complexity: 20
+
+  # Nesting depth
+  nestif:
+    min-complexity: 5
+
+  # Line length
+  lll:
+    line-length: 120
+    tab-width: 4
+
+  # Import grouping
+  goimports:
+    local-prefixes: github.com/schemabounce/kolumn
+
+  # Import sorting
+  gci:
+    local-prefixes: github.com/schemabounce/kolumn
+    skip-generated: true
+
+  # Code formatting
+  gofmt:
+    simplify: true
+
+  # More strict formatting
+  gofumpt:
+    lang-version: "1.21"
+    extra-rules: true
+
+  # Security issues
+  gosec:
+    severity: "medium"
+    confidence: "medium"
+    excludes:
+      - G104 # Audit errors not checked (too noisy for SDK)
+    rules:
+      G401: true  # Detect weak crypto
+      G501: true  # Detect weak crypto import
+      G502: true  # Detect weak crypto import
+
+  # Style issues
+  golint:
+    min-confidence: 0.8
+
+  # Variable naming
+  varnamelen:
+    min-name-length: 2
+    ignore-type-assert-ok: true
+    ignore-map-index-ok: true
+    ignore-chan-recv-ok: true
+    ignore-names:
+      - err
+      - ok
+      - id
+      - i
+      - j
+      - k
+      - v
+      - t
+      - db
+      - tx
+      - ctx
+
+  # Documentation
+  godoc:
+    check-all: true
+
+  # Comment formatting
+  godot:
+    scope: declarations
+    exclude:
+      - "^fixme:"
+      - "^todo:"
+    period: true
+    capital: true
+
+  # Struct tags
+  tagliatelle:
+    case:
+      rules:
+        json: snake
+        yaml: snake
+        xml: snake
+        bson: snake
+        avro: snake
+        mapstructure: snake
+
+  # Interface definitions
+  interfacebloat:
+    max: 10
+
+  # Maintain zero values
+  zerologlint:
+    check-events: true
+
+  # Error wrapping
+  wrapcheck:
+    ignorePackageGlobs:
+      - github.com/schemabounce/kolumn/sdk/*
+
+linters:
+  enable:
+    # Error detection
+    - errcheck          # Check for unchecked errors
+    - gosimple          # Simplify code
+    - govet             # Go vet
+    - ineffassign       # Detect ineffectual assignments
+    - staticcheck       # Static analysis
+    - typecheck         # Type checking
+    - unused            # Detect unused code
+
+    # Style and formatting
+    - gofmt             # Format code
+    - gofumpt           # Stricter formatting
+    - goimports         # Fix imports
+    - gci               # Control Go package import order
+    - misspell          # Fix common spelling mistakes
+
+    # Code quality
+    - gocyclo           # Cyclomatic complexity
+    - funlen            # Function length
+    - gocognit          # Cognitive complexity
+    - nestif            # Deeply nested if statements
+    - lll               # Line length
+    - whitespace        # Whitespace issues
+
+    # Security
+    - gosec             # Security issues
+
+    # Documentation
+    - godoc             # Documentation
+    - godot             # Comment formatting
+
+    # Bugs and correctness
+    - bodyclose         # HTTP response body close
+    - nilerr            # Return nil error
+    - noctx             # HTTP requests without context
+    - rowserrcheck      # SQL rows.Err check
+    - sqlclosecheck     # SQL Close() check
+
+    # Performance
+    - prealloc          # Slice preallocation
+
+    # Style preferences
+    - tagliatelle       # Struct tag formatting
+    - varnamelen        # Variable name length
+
+  disable:
+    - exhaustive        # Too strict for SDK
+    - exhaustivestruct  # Too strict for SDK
+    - forbidigo         # No forbidden identifiers needed
+    - forcetypeassert   # Type assertions are OK in SDK
+    - ifshort           # Deprecated
+    - maligned          # Deprecated
+    - scopelint         # Deprecated
+    - interfacer        # Deprecated
+    - golint            # Deprecated
+    - nosnakecase       # We use snake_case in some places
+    - structcheck       # Deprecated
+    - varcheck          # Deprecated
+    - deadcode          # Deprecated
+
+issues:
+  # Show only new issues for commits
+  new: false
+
+  # Maximum issues count per one linter
+  max-issues-per-linter: 0
+
+  # Maximum count of issues with the same text
+  max-same-issues: 0
+
+  # Exclude specific issues
+  exclude:
+    - "Error return value of .((os\\.)?std(out|err)\\..*|.*Close|.*Flush|os\\.Remove(All)?|.*printf?|os\\.(Un)?Setenv). is not checked"
+    - "func name will be used as test\\.Test.* by other packages, and that stutters; consider calling this"
+    - "G104: Errors unhandled"  # Too noisy for examples
+
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
+        - funlen
+        - gocognit
+        - varnamelen
+
+    # Exclude some rules for example files
+    - path: examples/
+      linters:
+        - errcheck
+        - gosec
+        - varnamelen
+        - lll
+
+    # Exclude line length for generated files
+    - path: ".*\\.pb\\.go"
+      linters:
+        - lll
+
+    # Exclude documentation requirements for internal files
+    - path: internal/
+      linters:
+        - godoc
+
+severity:
+  default-severity: error
+  case-sensitive: false

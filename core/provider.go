@@ -6,9 +6,12 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/schemabounce/kolumn/sdk/helpers/security"
 )
 
 const (
@@ -26,12 +29,14 @@ const (
 // This is the minimum interface - dead simple to get started.
 type Provider interface {
 	// Configure sets up the provider with the given configuration
-	Configure(ctx context.Context, config Config) error
+	// Updated to accept map[string]interface{} for core compatibility
+	Configure(ctx context.Context, config map[string]interface{}) error
 
 	// Schema returns the provider's schema definition
 	Schema() (*Schema, error)
 
-	// CallFunction executes a provider function
+	// CallFunction executes a provider function with unified dispatch
+	// Supports function names: CreateResource, ReadResource, UpdateResource, DeleteResource, etc.
 	CallFunction(ctx context.Context, function string, input []byte) ([]byte, error)
 
 	// Close cleans up provider resources
@@ -63,21 +68,36 @@ type Config interface {
 }
 
 // Schema defines the provider's capabilities and supported object types
+// Updated to match core expectations with SupportedFunctions and ResourceTypes
 type Schema struct {
 	// Provider metadata
 	Name        string `json:"name"`
 	Version     string `json:"version"`
+	Protocol    string `json:"protocol"`
+	Type        string `json:"type"`
 	Description string `json:"description"`
 
-	// Supported object types categorized by create vs discover
-	CreateObjects   map[string]*ObjectType `json:"create_objects"`
-	DiscoverObjects map[string]*ObjectType `json:"discover_objects"`
+	// Core compatibility fields - these match the core ProviderSchema structure
+	SupportedFunctions []string                 `json:"supported_functions"` // Functions this provider implements
+	ResourceTypes      []ResourceTypeDefinition `json:"resource_types"`      // Resource types this provider manages
+	ConfigSchema       json.RawMessage          `json:"config_schema"`       // JSON schema for provider config
 
-	// Configuration schema
-	ConfigSchema *ConfigSchema `json:"config_schema,omitempty"`
+	// Legacy fields for backward compatibility (deprecated - use ResourceTypes instead)
+	CreateObjects   map[string]*ObjectType `json:"create_objects,omitempty"`
+	DiscoverObjects map[string]*ObjectType `json:"discover_objects,omitempty"`
 
-	// Available functions
+	// Available functions (deprecated - use SupportedFunctions instead)
 	Functions map[string]*Function `json:"functions,omitempty"`
+}
+
+// ResourceTypeDefinition describes a resource type the provider can manage
+// This matches the core expectation exactly
+type ResourceTypeDefinition struct {
+	Name         string          `json:"name"`          // Resource type name (table, topic, bucket, etc.)
+	Description  string          `json:"description"`   // Human readable description
+	ConfigSchema json.RawMessage `json:"config_schema"` // JSON schema for resource config
+	StateSchema  json.RawMessage `json:"state_schema"`  // JSON schema for resource state
+	Operations   []string        `json:"operations"`    // Supported operations (create, read, update, delete)
 }
 
 // ObjectType defines a specific object type the provider supports
@@ -198,6 +218,489 @@ func (c *secureConfig) GetSanitized() map[string]interface{} {
 		}
 	}
 	return sanitized
+}
+
+// =============================================================================
+// UNIFIED FUNCTION DISPATCH HELPERS
+// =============================================================================
+
+// UnifiedDispatcher helps bridge between new unified function dispatch and existing registries
+type UnifiedDispatcher struct {
+	createRegistry   CreateRegistry
+	discoverRegistry DiscoverRegistry
+}
+
+// CreateRegistry interface for create operations
+type CreateRegistry interface {
+	CallHandler(ctx context.Context, objectType, method string, input []byte) ([]byte, error)
+	GetObjectTypes() map[string]*ObjectType
+}
+
+// DiscoverRegistry interface for discover operations
+type DiscoverRegistry interface {
+	CallHandler(ctx context.Context, objectType, method string, input []byte) ([]byte, error)
+	GetObjectTypes() map[string]*ObjectType
+}
+
+// NewUnifiedDispatcher creates a new dispatcher
+func NewUnifiedDispatcher(createReg CreateRegistry, discoverReg DiscoverRegistry) *UnifiedDispatcher {
+	return &UnifiedDispatcher{
+		createRegistry:   createReg,
+		discoverRegistry: discoverReg,
+	}
+}
+
+// Dispatch handles unified function calls and routes them to appropriate registries
+func (d *UnifiedDispatcher) Dispatch(ctx context.Context, function string, input []byte) ([]byte, error) {
+	// SECURITY: Validate function name against allowed functions
+	allowedFunctions := map[string]bool{
+		"CreateResource":    true,
+		"ReadResource":      true,
+		"UpdateResource":    true,
+		"DeleteResource":    true,
+		"DiscoverResources": true,
+		"Ping":              true,
+	}
+
+	if !allowedFunctions[function] {
+		return nil, security.NewSecureError(
+			"operation not supported",
+			fmt.Sprintf("function not allowed: %s", function),
+			"INVALID_FUNCTION",
+		)
+	}
+
+	// Route to appropriate handler with security validation
+	switch function {
+	case "CreateResource":
+		return d.handleCreateResource(ctx, input)
+	case "ReadResource":
+		return d.handleReadResource(ctx, input)
+	case "UpdateResource":
+		return d.handleUpdateResource(ctx, input)
+	case "DeleteResource":
+		return d.handleDeleteResource(ctx, input)
+	case "DiscoverResources":
+		return d.handleDiscoverResources(ctx, input)
+	case "Ping":
+		return d.handlePing(ctx, input)
+	default:
+		// This should never be reached due to validation above
+		return nil, security.NewSecureError(
+			"operation not supported",
+			fmt.Sprintf("unexpected function: %s", function),
+			"UNEXPECTED_FUNCTION",
+		)
+	}
+}
+
+func (d *UnifiedDispatcher) handleCreateResource(ctx context.Context, input []byte) ([]byte, error) {
+	// SECURITY: Use safe unmarshaling with size and depth limits
+	var unifiedReq map[string]interface{}
+	if err := security.SafeUnmarshal(input, &unifiedReq); err != nil {
+		return nil, security.NewSecureError(
+			"invalid request format",
+			fmt.Sprintf("create request unmarshal failed: %v", err),
+			"INVALID_REQUEST",
+		)
+	}
+
+	resourceType, ok := unifiedReq["resource_type"].(string)
+	if !ok {
+		return nil, security.NewSecureError(
+			"invalid request format",
+			"missing resource_type in request",
+			"MISSING_RESOURCE_TYPE",
+		)
+	}
+
+	// SECURITY: Validate resource type
+	if err := security.ValidateObjectType(resourceType); err != nil {
+		return nil, security.NewSecureError(
+			"invalid resource type",
+			fmt.Sprintf("resource type validation failed: %v", err),
+			"INVALID_RESOURCE_TYPE",
+		)
+	}
+
+	// SECURITY: Validate request configuration size
+	if config, ok := unifiedReq["config"].(map[string]interface{}); ok {
+		validator := &security.InputSizeValidator{}
+		if err := validator.ValidateConfigSize(config); err != nil {
+			return nil, security.NewSecureError(
+				"request too large",
+				fmt.Sprintf("create request config validation failed: %v", err),
+				"REQUEST_TOO_LARGE",
+			)
+		}
+	}
+
+	// Transform unified request format to create registry format
+	createReq := map[string]interface{}{
+		"object_type": resourceType, // Transform resource_type -> object_type
+		"name":        unifiedReq["name"],
+		"config":      unifiedReq["config"],
+	}
+
+	// Include optional fields if present
+	if deps, ok := unifiedReq["dependencies"]; ok {
+		createReq["dependencies"] = deps
+	}
+	if options, ok := unifiedReq["options"]; ok {
+		createReq["options"] = options
+	}
+	if metadata, ok := unifiedReq["metadata"]; ok {
+		createReq["metadata"] = metadata
+	}
+
+	// Marshal the transformed request
+	transformedInput, err := json.Marshal(createReq)
+	if err != nil {
+		return nil, security.NewSecureError(
+			"request transformation failed",
+			fmt.Sprintf("failed to transform request: %v", err),
+			"TRANSFORMATION_FAILED",
+		)
+	}
+
+	if d.createRegistry != nil {
+		return d.createRegistry.CallHandler(ctx, resourceType, "create", transformedInput)
+	}
+
+	return nil, security.NewSecureError(
+		"registry not available",
+		fmt.Sprintf("no create registry available for resource type: %s", resourceType),
+		"REGISTRY_NOT_FOUND",
+	)
+}
+
+func (d *UnifiedDispatcher) handleReadResource(ctx context.Context, input []byte) ([]byte, error) {
+	// SECURITY: Use safe unmarshaling with size and depth limits
+	var unifiedReq map[string]interface{}
+	if err := security.SafeUnmarshal(input, &unifiedReq); err != nil {
+		return nil, security.NewSecureError(
+			"invalid request format",
+			fmt.Sprintf("read request unmarshal failed: %v", err),
+			"INVALID_REQUEST",
+		)
+	}
+
+	resourceType, ok := unifiedReq["resource_type"].(string)
+	if !ok {
+		return nil, security.NewSecureError(
+			"invalid request format",
+			"missing resource_type in request",
+			"MISSING_RESOURCE_TYPE",
+		)
+	}
+
+	// SECURITY: Validate resource type
+	if err := security.ValidateObjectType(resourceType); err != nil {
+		return nil, security.NewSecureError(
+			"invalid resource type",
+			fmt.Sprintf("resource type validation failed: %v", err),
+			"INVALID_RESOURCE_TYPE",
+		)
+	}
+
+	// Transform unified request format to create registry format
+	readReq := map[string]interface{}{
+		"object_type": resourceType, // Transform resource_type -> object_type
+		"resource_id": unifiedReq["resource_id"],
+		"name":        unifiedReq["name"],
+	}
+
+	transformedInput, err := json.Marshal(readReq)
+	if err != nil {
+		return nil, security.NewSecureError(
+			"request transformation failed",
+			fmt.Sprintf("failed to transform request: %v", err),
+			"TRANSFORMATION_FAILED",
+		)
+	}
+
+	if d.createRegistry != nil {
+		return d.createRegistry.CallHandler(ctx, resourceType, "read", transformedInput)
+	}
+
+	return nil, security.NewSecureError(
+		"registry not available",
+		fmt.Sprintf("no create registry available for resource type: %s", resourceType),
+		"REGISTRY_NOT_FOUND",
+	)
+}
+
+func (d *UnifiedDispatcher) handleUpdateResource(ctx context.Context, input []byte) ([]byte, error) {
+	// SECURITY: Use safe unmarshaling with size and depth limits
+	var unifiedReq map[string]interface{}
+	if err := security.SafeUnmarshal(input, &unifiedReq); err != nil {
+		return nil, security.NewSecureError(
+			"invalid request format",
+			fmt.Sprintf("update request unmarshal failed: %v", err),
+			"INVALID_REQUEST",
+		)
+	}
+
+	resourceType, ok := unifiedReq["resource_type"].(string)
+	if !ok {
+		return nil, security.NewSecureError(
+			"invalid request format",
+			"missing resource_type in request",
+			"MISSING_RESOURCE_TYPE",
+		)
+	}
+
+	// SECURITY: Validate resource type
+	if err := security.ValidateObjectType(resourceType); err != nil {
+		return nil, security.NewSecureError(
+			"invalid resource type",
+			fmt.Sprintf("resource type validation failed: %v", err),
+			"INVALID_RESOURCE_TYPE",
+		)
+	}
+
+	// SECURITY: Validate request configuration size
+	if config, ok := unifiedReq["config"].(map[string]interface{}); ok {
+		validator := &security.InputSizeValidator{}
+		if err := validator.ValidateConfigSize(config); err != nil {
+			return nil, security.NewSecureError(
+				"request too large",
+				fmt.Sprintf("update request config validation failed: %v", err),
+				"REQUEST_TOO_LARGE",
+			)
+		}
+	}
+
+	// Transform unified request format to create registry format
+	updateReq := map[string]interface{}{
+		"object_type": resourceType, // Transform resource_type -> object_type
+		"resource_id": unifiedReq["resource_id"],
+		"name":        unifiedReq["name"],
+		"config":      unifiedReq["config"],
+	}
+
+	// Include optional fields if present
+	if currentState, ok := unifiedReq["current_state"]; ok {
+		updateReq["current_state"] = currentState
+	}
+	if options, ok := unifiedReq["options"]; ok {
+		updateReq["options"] = options
+	}
+
+	transformedInput, err := json.Marshal(updateReq)
+	if err != nil {
+		return nil, security.NewSecureError(
+			"request transformation failed",
+			fmt.Sprintf("failed to transform request: %v", err),
+			"TRANSFORMATION_FAILED",
+		)
+	}
+
+	if d.createRegistry != nil {
+		return d.createRegistry.CallHandler(ctx, resourceType, "update", transformedInput)
+	}
+
+	return nil, security.NewSecureError(
+		"registry not available",
+		fmt.Sprintf("no create registry available for resource type: %s", resourceType),
+		"REGISTRY_NOT_FOUND",
+	)
+}
+
+func (d *UnifiedDispatcher) handleDeleteResource(ctx context.Context, input []byte) ([]byte, error) {
+	// SECURITY: Use safe unmarshaling with size and depth limits
+	var unifiedReq map[string]interface{}
+	if err := security.SafeUnmarshal(input, &unifiedReq); err != nil {
+		return nil, security.NewSecureError(
+			"invalid request format",
+			fmt.Sprintf("delete request unmarshal failed: %v", err),
+			"INVALID_REQUEST",
+		)
+	}
+
+	resourceType, ok := unifiedReq["resource_type"].(string)
+	if !ok {
+		return nil, security.NewSecureError(
+			"invalid request format",
+			"missing resource_type in request",
+			"MISSING_RESOURCE_TYPE",
+		)
+	}
+
+	// SECURITY: Validate resource type
+	if err := security.ValidateObjectType(resourceType); err != nil {
+		return nil, security.NewSecureError(
+			"invalid resource type",
+			fmt.Sprintf("resource type validation failed: %v", err),
+			"INVALID_RESOURCE_TYPE",
+		)
+	}
+
+	// Transform unified request format to create registry format
+	deleteReq := map[string]interface{}{
+		"object_type": resourceType, // Transform resource_type -> object_type
+		"resource_id": unifiedReq["resource_id"],
+		"name":        unifiedReq["name"],
+	}
+
+	// Include optional fields if present
+	if state, ok := unifiedReq["state"]; ok {
+		deleteReq["state"] = state
+	}
+	if options, ok := unifiedReq["options"]; ok {
+		deleteReq["options"] = options
+	}
+
+	transformedInput, err := json.Marshal(deleteReq)
+	if err != nil {
+		return nil, security.NewSecureError(
+			"request transformation failed",
+			fmt.Sprintf("failed to transform request: %v", err),
+			"TRANSFORMATION_FAILED",
+		)
+	}
+
+	if d.createRegistry != nil {
+		return d.createRegistry.CallHandler(ctx, resourceType, "delete", transformedInput)
+	}
+
+	return nil, security.NewSecureError(
+		"registry not available",
+		fmt.Sprintf("no create registry available for resource type: %s", resourceType),
+		"REGISTRY_NOT_FOUND",
+	)
+}
+
+func (d *UnifiedDispatcher) handleDiscoverResources(ctx context.Context, input []byte) ([]byte, error) {
+	// SECURITY: Use safe unmarshaling with size and depth limits
+	var unifiedReq map[string]interface{}
+	if err := security.SafeUnmarshal(input, &unifiedReq); err != nil {
+		return nil, security.NewSecureError(
+			"invalid request format",
+			fmt.Sprintf("discover request unmarshal failed: %v", err),
+			"INVALID_REQUEST",
+		)
+	}
+
+	resourceType, ok := unifiedReq["resource_type"].(string)
+	if !ok {
+		return nil, security.NewSecureError(
+			"invalid request format",
+			"missing resource_type in request",
+			"MISSING_RESOURCE_TYPE",
+		)
+	}
+
+	// SECURITY: Validate resource type
+	if err := security.ValidateObjectType(resourceType); err != nil {
+		return nil, security.NewSecureError(
+			"invalid resource type",
+			fmt.Sprintf("resource type validation failed: %v", err),
+			"INVALID_RESOURCE_TYPE",
+		)
+	}
+
+	// Transform unified request format to discover registry format
+	// For discover operations, we primarily use "scan" method
+	discoverReq := map[string]interface{}{
+		"object_types": []string{resourceType},
+	}
+
+	// Include filters if present
+	if filters, ok := unifiedReq["filters"]; ok {
+		discoverReq["filters"] = filters
+	}
+	if options, ok := unifiedReq["options"]; ok {
+		discoverReq["options"] = options
+	}
+
+	transformedInput, err := json.Marshal(discoverReq)
+	if err != nil {
+		return nil, security.NewSecureError(
+			"request transformation failed",
+			fmt.Sprintf("failed to transform request: %v", err),
+			"TRANSFORMATION_FAILED",
+		)
+	}
+
+	if d.discoverRegistry != nil {
+		return d.discoverRegistry.CallHandler(ctx, resourceType, "scan", transformedInput)
+	}
+
+	return nil, security.NewSecureError(
+		"registry not available",
+		fmt.Sprintf("no discover registry available for resource type: %s", resourceType),
+		"REGISTRY_NOT_FOUND",
+	)
+}
+
+func (d *UnifiedDispatcher) handlePing(ctx context.Context, input []byte) ([]byte, error) {
+	response := map[string]interface{}{
+		"success": true,
+		"status":  "healthy",
+	}
+	return json.Marshal(response)
+}
+
+// BuildCompatibleSchema builds a core-compatible schema from registries
+func (d *UnifiedDispatcher) BuildCompatibleSchema(name, version, providerType, description string) *Schema {
+	schema := &Schema{
+		Name:         name,
+		Version:      version,
+		Protocol:     "1.0",
+		Type:         providerType,
+		Description:  description,
+		ConfigSchema: json.RawMessage(`{}`), // Basic config schema
+	}
+
+	// Build supported functions
+	var supportedFunctions []string
+	var resourceTypes []ResourceTypeDefinition
+
+	// Add core functions
+	supportedFunctions = append(supportedFunctions,
+		"CreateResource", "ReadResource", "UpdateResource", "DeleteResource", "Ping")
+
+	// Build resource types from registries
+	if d.createRegistry != nil {
+		createObjects := d.createRegistry.GetObjectTypes()
+		for name, objType := range createObjects {
+			resourceTypes = append(resourceTypes, ResourceTypeDefinition{
+				Name:         name,
+				Description:  objType.Description,
+				Operations:   []string{"create", "read", "update", "delete"},
+				ConfigSchema: json.RawMessage(`{}`),
+				StateSchema:  json.RawMessage(`{}`),
+			})
+		}
+	}
+
+	if d.discoverRegistry != nil {
+		supportedFunctions = append(supportedFunctions, "DiscoverResources")
+		discoverObjects := d.discoverRegistry.GetObjectTypes()
+		for name, objType := range discoverObjects {
+			resourceTypes = append(resourceTypes, ResourceTypeDefinition{
+				Name:         name,
+				Description:  objType.Description,
+				Operations:   []string{"discover"},
+				ConfigSchema: json.RawMessage(`{}`),
+				StateSchema:  json.RawMessage(`{}`),
+			})
+		}
+	}
+
+	schema.SupportedFunctions = supportedFunctions
+	schema.ResourceTypes = resourceTypes
+
+	// Maintain backward compatibility
+	if d.createRegistry != nil {
+		schema.CreateObjects = d.createRegistry.GetObjectTypes()
+	}
+	if d.discoverRegistry != nil {
+		schema.DiscoverObjects = d.discoverRegistry.GetObjectTypes()
+	}
+
+	return schema
 }
 
 // Get implements Config
@@ -434,15 +937,6 @@ type ObjectDocumentation struct {
 	Examples      []*ObjectExample    `json:"examples,omitempty"`
 	BestPractices []string            `json:"best_practices,omitempty"`
 	Links         []DocumentationLink `json:"links,omitempty"`
-}
-
-// ProviderExample shows how to use the provider
-type ProviderExample struct {
-	Name        string `json:"name"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	HCL         string `json:"hcl"`
-	Category    string `json:"category,omitempty"`
 }
 
 // DocumentationLink represents a documentation link

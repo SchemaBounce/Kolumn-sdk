@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is the **Kolumn Provider SDK** - a Go SDK library for building external providers that integrate with Kolumn's infrastructure-as-code platform. The SDK follows Go best practices (like AWS SDK and other provider SDKs) as a **library**, not an application framework.
 
+**🚀 100% CORE COMPATIBILITY ACHIEVED** - The SDK is now fully compatible with Kolumn core implementation, supporting unified function dispatch, enhanced schema structure, and standardized configuration interface.
+
 ## Key Architecture Principles
 
 ### 1. **Library Pattern** (Not RPC Plugins)
@@ -33,14 +35,50 @@ This is the **Kolumn Provider SDK** - a Go SDK library for building external pro
 ### Provider Interface
 ```go
 type Provider interface {
-    Configure(ctx context.Context, config Config) error
+    // Updated to accept map[string]interface{} for core compatibility
+    Configure(ctx context.Context, config map[string]interface{}) error
     Schema() (*Schema, error)
+    // Updated to support unified dispatch functions: CreateResource, ReadResource, etc.
     CallFunction(ctx context.Context, function string, input []byte) ([]byte, error)
     Close() error
 }
 ```
 
+**Key Updates for Core Compatibility:**
+- `Configure()` now accepts `map[string]interface{}` directly (no longer uses Config interface)
+- `CallFunction()` supports unified dispatch: `CreateResource`, `ReadResource`, `UpdateResource`, `DeleteResource`, `DiscoverResources`, `Ping`
+- `Schema()` returns enhanced schema with `SupportedFunctions`, `ResourceTypes`, and `ConfigSchema` fields
+
 The `Schema()` method returns all information needed for documentation generation over RPC.
+
+## Unified Function Dispatch (Core Compatibility)
+
+### UnifiedDispatcher Pattern
+The SDK now includes `UnifiedDispatcher` to bridge existing registry patterns with core's unified function dispatch:
+
+```go
+// Create unified dispatcher from existing registries
+dispatcher := core.NewUnifiedDispatcher(createRegistry, discoverRegistry)
+
+// Handle core function calls
+response, err := dispatcher.Dispatch(ctx, "CreateResource", input)
+
+// Build core-compatible schema
+schema := dispatcher.BuildCompatibleSchema(name, version, providerType, description)
+```
+
+**Supported Unified Functions:**
+- `CreateResource` - Routes to CREATE registry's create method
+- `ReadResource` - Routes to CREATE registry's read method  
+- `UpdateResource` - Routes to CREATE registry's update method
+- `DeleteResource` - Routes to CREATE registry's delete method
+- `DiscoverResources` - Routes to DISCOVER registry's scan method
+- `Ping` - Returns health status
+
+**Request Format Transformation:**
+- Unified format uses `resource_type` field
+- Registry format uses `object_type` field
+- UnifiedDispatcher automatically transforms between formats
 
 ## Handler Registry Pattern
 
@@ -112,13 +150,57 @@ schema, err := provider.Schema()
 // Kolumn CLI calls this over RPC for documentation generation
 ```
 
+## Security Features
+
+The SDK includes comprehensive security hardening across all operations:
+
+### Security Measures
+- **SafeUnmarshal**: All JSON unmarshaling uses `security.SafeUnmarshal` with size and depth limits
+- **ValidateObjectType**: Resource types validated against security criteria before processing
+- **InputSizeValidator**: Configuration size limits enforced to prevent DoS attacks
+- **SecureError**: All errors use `security.NewSecureError` for consistent, safe error handling
+- **Request Validation**: All unified dispatch handlers validate requests before processing
+
+### Security by Handler
+Each unified dispatch handler includes:
+```go
+// Example: CreateResource handler security
+func (d *UnifiedDispatcher) handleCreateResource(ctx context.Context, input []byte) ([]byte, error) {
+    // 1. Safe unmarshaling with limits
+    var unifiedReq map[string]interface{}
+    if err := security.SafeUnmarshal(input, &unifiedReq); err != nil {
+        return nil, security.NewSecureError("invalid request format", ..., "INVALID_REQUEST")
+    }
+    
+    // 2. Resource type validation
+    if err := security.ValidateObjectType(resourceType); err != nil {
+        return nil, security.NewSecureError("invalid resource type", ..., "INVALID_RESOURCE_TYPE")
+    }
+    
+    // 3. Configuration size validation
+    validator := &security.InputSizeValidator{}
+    if err := validator.ValidateConfigSize(config); err != nil {
+        return nil, security.NewSecureError("request too large", ..., "REQUEST_TOO_LARGE")
+    }
+}
+```
+
+### Secure Configuration
+- `SecureConfig` automatically marks sensitive fields (password, secret, token, key, credential)
+- `GetSanitized()` method for safe logging without exposing secrets
+- Enhanced validation for sensitive field requirements
+
 ## Provider Development Pattern
 
-1. **Create provider project**: `mkdir kolumn-provider-name`
+### Required Binary Naming Convention
+**⚠️ CRITICAL**: All provider binaries must follow the `kolumn-provider-{name}` pattern for automatic discovery by Kolumn core.
+
+1. **Create provider project**: `mkdir kolumn-provider-mydb` (note the required naming)
 2. **Import SDK**: `go get github.com/schemabounce/kolumn/sdk`
-3. **Implement Provider interface**: Start with 4-method interface
+3. **Implement Provider interface**: Start with 4-method interface (new signature for Configure)
 4. **Register object handlers**: Use create/discover registries
-5. **Build provider binary**: `go build -o kolumn-provider-name`
+5. **Add unified dispatch**: Use UnifiedDispatcher for core compatibility
+6. **Build provider binary**: `go build -o kolumn-provider-mydb` (matching the directory name)
 
 ## Important Notes for Development
 

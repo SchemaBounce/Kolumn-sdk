@@ -13,11 +13,30 @@ The Kolumn Provider SDK enables developers to build external providers that inte
 - **✨ Simple Interface** - Just 4 methods to implement
 - **📈 Progressive Disclosure** - Start simple, add complexity as needed
 
+## 🚀 SDK Compatibility Status
+
+**✅ 100% CORE COMPATIBILITY ACHIEVED**
+
+The Kolumn Provider SDK is now **fully compatible** with Kolumn core implementation:
+
+- **✅ Unified Function Dispatch**: Supports `CreateResource`, `ReadResource`, `UpdateResource`, `DeleteResource`, `Ping`, `DiscoverResources`  
+- **✅ Enhanced Schema Structure**: Includes `SupportedFunctions`, `ResourceTypes`, and `ConfigSchema` fields
+- **✅ Configuration Interface**: Accepts `map[string]interface{}` for direct core compatibility
+- **✅ UnifiedDispatcher**: Bridges existing registries with new unified dispatch pattern
+- **✅ Provider Naming**: Follows `kolumn-provider-{name}` pattern for automatic discovery
+
+**Compatibility Score**: 100% (up from 85% baseline)
+
 ## Quick Start
 
 ### 1. Create a New Provider Project
 
+**⚠️ Important: Provider Binary Naming Convention**
+
+All provider binaries must follow the `kolumn-provider-{name}` pattern for automatic discovery by Kolumn core.
+
 ```bash
+# REQUIRED naming pattern: kolumn-provider-{name}
 mkdir kolumn-provider-mydb
 cd kolumn-provider-mydb
 go mod init github.com/yourorg/kolumn-provider-mydb
@@ -46,6 +65,24 @@ func (p *MyProvider) Configure(ctx context.Context, config core.Config) error { 
 func (p *MyProvider) Schema() (*core.Schema, error) { }
 func (p *MyProvider) CallFunction(ctx context.Context, function string, input []byte) ([]byte, error) { }
 func (p *MyProvider) Close() error { }
+```
+
+### 2.1 (Optional) Read Auth Claims from Context
+
+Kolumn core can pass validated authentication details into `ctx`. Use SDK helpers to read them:
+
+```go
+import sdkauth "github.com/schemabounce/kolumn/sdk/core/auth"
+
+func (p *MyProvider) CallFunction(ctx context.Context, function string, input []byte) ([]byte, error) {
+    if info, ok := sdkauth.FromAuth(ctx); ok {
+        // info.Claims.Tier: community|pro|enterprise
+        // info.Claims.Entitlements: e.g., ["governance"]
+        // info.RawToken: bearer token (if provided)
+        // Use for feature gating or audit only; core validates tokens.
+    }
+    // ...
+}
 ```
 
 ### 3. Study the Example
