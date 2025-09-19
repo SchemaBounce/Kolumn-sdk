@@ -939,15 +939,6 @@ type ObjectDocumentation struct {
 	Links         []DocumentationLink `json:"links,omitempty"`
 }
 
-// ProviderExample shows how to use the provider
-type ProviderExample struct {
-	Name        string `json:"name"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	HCL         string `json:"hcl"`
-	Category    string `json:"category,omitempty"`
-}
-
 // DocumentationLink represents a documentation link
 type DocumentationLink struct {
 	Title string `json:"title"`

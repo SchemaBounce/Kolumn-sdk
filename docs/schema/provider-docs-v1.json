@@ -1,0 +1,372 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://registry.kolumn.com/schemas/provider-docs/v1.json",
+  "title": "Kolumn Provider Documentation Schema",
+  "description": "Universal JSON schema for Kolumn provider documentation used in the provider registry",
+  "version": "1.0.0",
+  "type": "object",
+  "required": ["provider", "configuration", "resources", "metadata"],
+  "properties": {
+    "provider": {
+      "type": "object",
+      "title": "Provider Metadata",
+      "description": "Core information about the provider",
+      "required": ["namespace", "name", "version", "category", "description"],
+      "properties": {
+        "namespace": {
+          "type": "string",
+          "description": "Provider namespace (e.g., 'kolumn-official', 'community')",
+          "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+          "minLength": 3,
+          "maxLength": 50
+        },
+        "name": {
+          "type": "string",
+          "description": "Provider name (e.g., 'postgres', 'kafka')",
+          "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+          "minLength": 2,
+          "maxLength": 30
+        },
+        "display_name": {
+          "type": "string",
+          "description": "Human-readable provider name",
+          "maxLength": 100
+        },
+        "version": {
+          "type": "string",
+          "description": "Provider version (semantic versioning)",
+          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+        },
+        "sdk_version": {
+          "type": "string",
+          "description": "Kolumn SDK version used",
+          "pattern": "^v\\d+\\.\\d+\\.\\d+$"
+        },
+        "category": {
+          "type": "string",
+          "description": "Provider category",
+          "enum": ["database", "cache", "etl", "streaming", "orchestration", "storage", "quality", "orm"]
+        },
+        "subcategory": {
+          "type": "string",
+          "description": "Provider subcategory for more specific classification",
+          "maxLength": 50
+        },
+        "description": {
+          "type": "string",
+          "description": "Short description of the provider",
+          "minLength": 10,
+          "maxLength": 200
+        },
+        "long_description": {
+          "type": "string",
+          "description": "Detailed description with features and capabilities",
+          "maxLength": 2000
+        },
+        "tags": {
+          "type": "array",
+          "description": "Tags for discovery and categorization",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+            "maxLength": 20
+          },
+          "uniqueItems": true,
+          "maxItems": 10
+        },
+        "maintainer": {
+          "type": "object",
+          "description": "Provider maintainer information",
+          "properties": {
+            "name": {"type": "string", "maxLength": 100},
+            "email": {"type": "string", "format": "email"},
+            "url": {"type": "string", "format": "uri"},
+            "organization": {"type": "string", "maxLength": 100}
+          }
+        },
+        "repository": {
+          "type": "object",
+          "description": "Source repository information",
+          "properties": {
+            "url": {"type": "string", "format": "uri"},
+            "branch": {"type": "string", "default": "main"},
+            "directory": {"type": "string", "description": "Provider directory within repo"}
+          }
+        },
+        "logo_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL to provider logo"
+        },
+        "website_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Provider website or documentation URL"
+        },
+        "license": {
+          "type": "string",
+          "description": "License identifier (SPDX format)",
+          "examples": ["MIT", "Apache-2.0", "GPL-3.0"]
+        }
+      }
+    },
+    "configuration": {
+      "type": "object",
+      "title": "Provider Configuration",
+      "description": "Provider configuration schema and examples",
+      "required": ["schema"],
+      "properties": {
+        "schema": {
+          "type": "object",
+          "description": "JSON schema for provider configuration",
+          "$comment": "This should be a valid JSON Schema for configuration validation"
+        },
+        "examples": {
+          "type": "array",
+          "description": "Configuration examples",
+          "items": {
+            "type": "object",
+            "required": ["name", "title", "config"],
+            "properties": {
+              "name": {"type": "string", "description": "Example identifier"},
+              "title": {"type": "string", "description": "Example title"},
+              "description": {"type": "string", "description": "Example description"},
+              "category": {"type": "string", "enum": ["basic", "advanced", "production"]},
+              "config": {"type": "object", "description": "Example configuration"},
+              "notes": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        },
+        "validation": {
+          "type": "object",
+          "description": "Additional validation rules",
+          "properties": {
+            "required_fields": {"type": "array", "items": {"type": "string"}},
+            "optional_fields": {"type": "array", "items": {"type": "string"}},
+            "sensitive_fields": {"type": "array", "items": {"type": "string"}},
+            "connection_test": {"type": "boolean", "description": "Whether configuration includes connection testing"}
+          }
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "title": "Resource Types",
+      "description": "All resource types supported by this provider",
+      "patternProperties": {
+        "^[a-z][a-z0-9_]*[a-z0-9]$": {
+          "type": "object",
+          "description": "Resource type definition",
+          "required": ["type", "operations", "schema", "documentation"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["create", "discover"],
+              "description": "Resource classification"
+            },
+            "display_name": {
+              "type": "string",
+              "description": "Human-readable resource name"
+            },
+            "description": {
+              "type": "string",
+              "description": "Resource description",
+              "maxLength": 500
+            },
+            "category": {
+              "type": "string",
+              "description": "Resource category",
+              "maxLength": 50
+            },
+            "operations": {
+              "type": "array",
+              "description": "Supported CRUD operations",
+              "items": {
+                "type": "string",
+                "enum": ["create", "read", "update", "delete", "discover", "scan", "analyze"]
+              },
+              "uniqueItems": true
+            },
+            "schema": {
+              "type": "object",
+              "description": "JSON schema for resource configuration",
+              "required": ["properties"],
+              "properties": {
+                "properties": {"type": "object"},
+                "required": {"type": "array", "items": {"type": "string"}},
+                "additionalProperties": {"type": "boolean"},
+                "definitions": {"type": "object"}
+              }
+            },
+            "state_schema": {
+              "type": "object",
+              "description": "JSON schema for resource state",
+              "properties": {
+                "properties": {"type": "object"},
+                "required": {"type": "array", "items": {"type": "string"}}
+              }
+            },
+            "documentation": {
+              "type": "object",
+              "description": "Resource-specific documentation",
+              "properties": {
+                "overview": {"type": "string", "description": "Resource overview"},
+                "usage": {"type": "string", "description": "Usage instructions"},
+                "arguments": {"type": "object", "description": "Argument documentation"},
+                "attributes": {"type": "object", "description": "Attribute documentation"},
+                "import": {"type": "string", "description": "Import instructions"},
+                "best_practices": {"type": "array", "items": {"type": "string"}},
+                "common_pitfalls": {"type": "array", "items": {"type": "string"}},
+                "troubleshooting": {"type": "array", "items": {"type": "string"}}
+              }
+            },
+            "examples": {
+              "type": "array",
+              "description": "Resource usage examples",
+              "items": {
+                "type": "object",
+                "required": ["name", "title", "hcl"],
+                "properties": {
+                  "name": {"type": "string", "description": "Example identifier"},
+                  "title": {"type": "string", "description": "Example title"},
+                  "description": {"type": "string", "description": "Example description"},
+                  "category": {"type": "string", "enum": ["basic", "intermediate", "advanced", "production"]},
+                  "use_case": {"type": "string", "description": "Real-world use case"},
+                  "hcl": {"type": "string", "description": "HCL configuration code"},
+                  "prerequisites": {"type": "array", "items": {"type": "string"}},
+                  "expected_outputs": {"type": "object", "description": "Expected resource outputs"},
+                  "validated": {"type": "boolean", "description": "Whether example has been validated"},
+                  "tags": {"type": "array", "items": {"type": "string"}}
+                }
+              }
+            },
+            "relationships": {
+              "type": "array",
+              "description": "Relationships with other resources",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "resource_type": {"type": "string"},
+                  "relationship": {"type": "string", "enum": ["depends_on", "creates", "manages", "monitors"]},
+                  "description": {"type": "string"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "examples": {
+      "type": "array",
+      "title": "Provider Examples",
+      "description": "Complete provider usage examples",
+      "items": {
+        "type": "object",
+        "required": ["name", "title", "hcl"],
+        "properties": {
+          "name": {"type": "string", "description": "Example identifier"},
+          "title": {"type": "string", "description": "Example title"},
+          "description": {"type": "string", "description": "Example description"},
+          "category": {"type": "string", "enum": ["getting-started", "basic", "intermediate", "advanced", "production", "migration"]},
+          "complexity": {"type": "string", "enum": ["beginner", "intermediate", "expert"]},
+          "use_case": {"type": "string", "description": "Real-world use case"},
+          "hcl": {"type": "string", "description": "Complete HCL configuration"},
+          "resources": {"type": "array", "items": {"type": "string"}, "description": "Resources used in this example"},
+          "prerequisites": {"type": "array", "items": {"type": "string"}},
+          "setup_instructions": {"type": "array", "items": {"type": "string"}},
+          "expected_outputs": {"type": "object", "description": "Expected outputs"},
+          "estimated_time": {"type": "string", "description": "Time to complete example"},
+          "validated": {"type": "boolean", "description": "Whether example has been validated"},
+          "tags": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "getting_started": {
+      "type": "object",
+      "title": "Getting Started Guide",
+      "description": "Quick start guide for the provider",
+      "properties": {
+        "overview": {"type": "string", "description": "Provider overview"},
+        "installation": {"type": "string", "description": "Installation instructions"},
+        "basic_usage": {"type": "string", "description": "Basic usage example"},
+        "next_steps": {"type": "array", "items": {"type": "string"}},
+        "common_tasks": {"type": "array", "items": {"type": "string"}},
+        "troubleshooting": {"type": "string", "description": "Common troubleshooting tips"}
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "title": "Compatibility Information",
+      "description": "Version and platform compatibility",
+      "properties": {
+        "kolumn_version": {"type": "string", "description": "Minimum Kolumn version"},
+        "sdk_version": {"type": "string", "description": "SDK version used"},
+        "supported_platforms": {"type": "array", "items": {"type": "string"}, "description": "Supported OS platforms"},
+        "dependencies": {"type": "array", "items": {"type": "string"}, "description": "External dependencies"},
+        "breaking_changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "version": {"type": "string"},
+              "description": {"type": "string"},
+              "migration_guide": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "title": "Registry Metadata",
+      "description": "Metadata for registry management",
+      "required": ["generated_at", "generator_version"],
+      "properties": {
+        "generated_at": {"type": "string", "format": "date-time", "description": "Documentation generation timestamp"},
+        "generator_version": {"type": "string", "description": "Documentation generator version"},
+        "schema_version": {"type": "string", "description": "Schema version", "default": "1.0.0"},
+        "checksum": {"type": "string", "description": "Documentation content checksum"},
+        "build_info": {
+          "type": "object",
+          "description": "Build environment information",
+          "properties": {
+            "commit_hash": {"type": "string"},
+            "build_date": {"type": "string", "format": "date-time"},
+            "go_version": {"type": "string"},
+            "platform": {"type": "string"}
+          }
+        },
+        "validation": {
+          "type": "object",
+          "description": "Validation results",
+          "properties": {
+            "schema_valid": {"type": "boolean"},
+            "examples_validated": {"type": "boolean"},
+            "links_checked": {"type": "boolean"},
+            "validation_date": {"type": "string", "format": "date-time"}
+          }
+        },
+        "stats": {
+          "type": "object",
+          "description": "Documentation statistics",
+          "properties": {
+            "resource_count": {"type": "integer"},
+            "example_count": {"type": "integer"},
+            "total_size": {"type": "integer", "description": "Total documentation size in bytes"}
+          }
+        }
+      }
+    },
+    "search_metadata": {
+      "type": "object",
+      "title": "Search Optimization",
+      "description": "Metadata for search indexing",
+      "properties": {
+        "keywords": {"type": "array", "items": {"type": "string"}, "description": "Search keywords"},
+        "full_text": {"type": "string", "description": "Full text content for search indexing"},
+        "searchable_fields": {"type": "array", "items": {"type": "string"}},
+        "boost_terms": {"type": "object", "description": "Terms to boost in search ranking"}
+      }
+    }
+  }
+}

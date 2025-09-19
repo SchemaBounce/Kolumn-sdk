@@ -67,6 +67,24 @@ func (p *MyProvider) CallFunction(ctx context.Context, function string, input []
 func (p *MyProvider) Close() error { }
 ```
 
+### 2.1 (Optional) Read Auth Claims from Context
+
+Kolumn core can pass validated authentication details into `ctx`. Use SDK helpers to read them:
+
+```go
+import sdkauth "github.com/schemabounce/kolumn/sdk/core/auth"
+
+func (p *MyProvider) CallFunction(ctx context.Context, function string, input []byte) ([]byte, error) {
+    if info, ok := sdkauth.FromAuth(ctx); ok {
+        // info.Claims.Tier: community|pro|enterprise
+        // info.Claims.Entitlements: e.g., ["governance"]
+        // info.RawToken: bearer token (if provided)
+        // Use for feature gating or audit only; core validates tokens.
+    }
+    // ...
+}
+```
+
 ### 3. Study the Example
 
 See `examples/simple/provider.go` for a complete working example showing all patterns.

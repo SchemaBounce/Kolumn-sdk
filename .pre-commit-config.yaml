@@ -1,0 +1,167 @@
+# Pre-commit hooks configuration for Kolumn SDK
+# https://pre-commit.com
+
+repos:
+  # Standard pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      # File formatting and cleanup
+      - id: trailing-whitespace
+        name: Remove trailing whitespace
+      - id: end-of-file-fixer
+        name: Ensure files end with newline
+      - id: check-yaml
+        name: Validate YAML files
+      - id: check-json
+        name: Validate JSON files
+      - id: check-toml
+        name: Validate TOML files
+      - id: check-xml
+        name: Validate XML files
+      
+      # Security and safety checks
+      - id: detect-private-key
+        name: Detect private keys
+      - id: check-added-large-files
+        name: Check for large files
+        args: ['--maxkb=500']
+      - id: check-case-conflict
+        name: Check for case conflicts
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+      - id: check-symlinks
+        name: Check for broken symlinks
+      
+      # Code quality
+      - id: mixed-line-ending
+        name: Check for mixed line endings
+        args: ['--fix=lf']
+      - id: check-executables-have-shebangs
+        name: Check executables have shebangs
+
+  # Go-specific formatting and linting
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      # Core Go tools
+      - id: go-fmt
+        name: Format Go code (gofmt)
+      - id: go-imports
+        name: Organize Go imports (goimports)
+      - id: go-vet-mod
+        name: Static analysis (go vet)
+      - id: go-mod-tidy
+        name: Tidy go.mod (go mod tidy)
+      - id: go-unit-tests
+        name: Run Go unit tests
+        args: ['-v', './...']
+      - id: go-build-mod
+        name: Build Go modules
+      - id: go-critic
+        name: Go code review (go-critic)
+      - id: golangci-lint-mod
+        name: Comprehensive Go linting (golangci-lint)
+
+  # Additional Go formatting with gofumpt (stricter than gofmt)
+  - repo: https://github.com/heschik/pre-commit-go-gofumpt
+    rev: v1.0.0
+    hooks:
+      - id: gofumpt
+        name: Format Go code (gofumpt - stricter)
+
+  # Security scanning
+  - repo: https://github.com/securecodewarrior/github-action-add-sarif
+    rev: v1.1.0
+    hooks:
+      - id: gosec
+        name: Go security checker (gosec)
+        language: golang
+        entry: gosec
+        args: ['-fmt=sarif', '-out=gosec-results.sarif', './...']
+        pass_filenames: false
+
+  # Detect secrets and credentials
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        name: Detect secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: .*\.git/.*|\.secrets\.baseline$
+
+  # Custom hooks for SDK-specific requirements
+  - repo: local
+    hooks:
+      # Banned terms detection (terraform references)
+      - id: banned-terms
+        name: Check for banned terms (terraform references)
+        entry: scripts/check-banned-terms.sh
+        language: script
+        files: \.(go|md|txt|yaml|yml|json)$
+        
+      # Documentation validation
+      - id: go-doc-check
+        name: Check Go documentation coverage
+        entry: scripts/check-go-docs.sh
+        language: script
+        files: \.go$
+        pass_filenames: true
+        
+      # Example code validation
+      - id: validate-examples
+        name: Validate example code compiles
+        entry: scripts/validate-examples.sh
+        language: script
+        files: examples/.*\.go$
+        pass_filenames: false
+        
+      # Interface compliance check
+      - id: interface-compliance
+        name: Check Provider interface compliance
+        entry: scripts/check-interface-compliance.sh
+        language: script
+        files: \.go$
+        pass_filenames: false
+        
+      # Binary naming validation
+      - id: binary-naming
+        name: Validate provider binary naming convention
+        entry: scripts/check-binary-naming.sh
+        language: script
+        files: examples/.*\.go$|cmd/.*\.go$
+        
+      # Schema validation
+      - id: schema-validation
+        name: Validate provider schemas
+        entry: scripts/validate-schemas.sh
+        language: script
+        files: \.go$
+        pass_filenames: false
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.39.0
+    hooks:
+      - id: markdownlint
+        name: Markdown linting
+        args: ['--config', '.markdownlint.yaml']
+
+  # License header checking
+  - repo: https://github.com/Lucas-C/pre-commit-hooks
+    rev: v1.5.5
+    hooks:
+      - id: insert-license
+        name: Insert license header
+        files: \.go$
+        args:
+          - --license-filepath
+          - scripts/license-header.txt
+          - --comment-style
+          - //
+
+# Global configuration
+default_language_version:
+  python: python3
+fail_fast: false
+minimum_pre_commit_version: '2.20.0'

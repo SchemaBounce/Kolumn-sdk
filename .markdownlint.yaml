@@ -1,0 +1,71 @@
+# Markdownlint configuration for Kolumn SDK
+# https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+
+# Default rule configuration
+default: true
+
+# Customize specific rules
+MD001: true      # Heading levels should only increment by one level at a time
+MD003:           # Heading style
+  style: "atx"   # Use # style headers
+MD004:           # Unordered list style
+  style: "dash"  # Use - for lists
+MD005: true      # Inconsistent indentation for list items
+MD007:           # Unordered list indentation
+  indent: 2      # 2 spaces for list indentation
+MD009:           # Trailing spaces
+  br_spaces: 2   # Allow 2 trailing spaces for line breaks
+MD012:           # Multiple consecutive blank lines
+  maximum: 2     # Allow up to 2 consecutive blank lines
+MD013:           # Line length
+  line_length: 120  # Allow longer lines for code examples
+  code_blocks: false # Don't check line length in code blocks
+  tables: false      # Don't check line length in tables
+  headings: false    # Don't check line length in headings
+MD022: true      # Headings should be surrounded by blank lines
+MD024:           # Multiple headings with the same content
+  allow_different_nesting: true  # Allow same heading text at different levels
+MD025:           # Multiple top level headings in the same document
+  front_matter_title: "^\\s*title\\s*[:=]"  # Allow if title in front matter
+MD026:           # Trailing punctuation in heading
+  punctuation: ".,;:!?"  # Disallow these characters at end of headings
+MD029:           # Ordered list item prefix
+  style: "ordered"  # Use 1. 2. 3. style
+MD030:           # Spaces after list markers
+  ul_single: 1     # 1 space after unordered list markers
+  ol_single: 1     # 1 space after ordered list markers
+  ul_multi: 1      # 1 space for multi-line unordered lists
+  ol_multi: 1      # 1 space for multi-line ordered lists
+MD032: true      # Lists should be surrounded by blank lines
+MD033:           # Inline HTML
+  allowed_elements: ["br", "sub", "sup", "code", "pre", "kbd", "details", "summary"]
+MD034: true      # Bare URL used
+MD035:           # Horizontal rule style
+  style: "---"   # Use --- for horizontal rules
+MD036: true      # Emphasis used instead of a heading
+MD037: true      # Spaces inside emphasis markers
+MD038: true      # Spaces inside code span elements
+MD039: true      # Spaces inside link text
+MD040: true      # Fenced code blocks should have a language specified
+MD041: true      # First line in file should be a top level heading
+MD042: true      # No empty links
+MD043: false     # Required headings structure (disabled - too restrictive)
+MD044:           # Proper names should have the correct capitalization
+  names: ["Kolumn", "SchemaBounce", "JavaScript", "TypeScript", "PostgreSQL", "MySQL", "MongoDB", "Redis", "Kafka", "Docker", "Kubernetes", "AWS", "GCP", "Azure"]
+  code_blocks: false  # Don't check names in code blocks
+MD045: true      # Images should have alternate text
+MD046:           # Code block style
+  style: "fenced"  # Use ``` style code blocks
+MD047: true      # Files should end with a single newline character
+MD048:           # Code fence style
+  style: "backtick"  # Use ``` not ~~~
+MD049:           # Emphasis style
+  style: "asterisk"  # Use *emphasis* not _emphasis_
+MD050:           # Strong style
+  style: "asterisk"  # Use **strong** not __strong__
+MD051: true      # Link fragments should be valid
+MD052: true      # Reference links and images should use a label that is defined
+MD053: true      # Link and image reference definitions should be needed
+
+# Custom rules for SDK documentation
+# Ensure consistency across all markdown files in the project
