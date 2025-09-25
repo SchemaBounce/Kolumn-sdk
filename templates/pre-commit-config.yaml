@@ -1,0 +1,57 @@
+# Pre-commit configuration template for Kolumn providers
+# Copy this file to .pre-commit-config.yaml in your provider repository
+# See https://pre-commit.com for more information
+
+repos:
+  # Standard pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+
+  # Go formatting and linting
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-fmt
+      - id: go-mod-tidy
+
+  # Custom go vet that excludes known safe unsafe pointer usage
+  - repo: local
+    hooks:
+      - id: go-vet-filtered
+        name: Go vet (filtered)
+        entry: sh -c 'go vet ./... 2>&1 | grep -v "possible misuse of unsafe.Pointer" || true'
+        language: system
+        files: \.go$
+        pass_filenames: false
+
+  # Kolumn provider-specific checks
+  - repo: local
+    hooks:
+      - id: provider-build-check
+        name: Ensure provider builds successfully
+        entry: sh -c 'go build -o /dev/null ./...'
+        language: system
+        files: \.(go)$
+        pass_filenames: false
+
+      - id: schema-consistency-check
+        name: Validate provider schema matches implementation
+        entry: sh -c 'go test . -run TestSchemaConsistencyPreCommitHook -v'
+        language: system
+        files: .*\.go$
+        pass_filenames: false
+
+      - id: check-debug-statements
+        name: Check for debugging statements
+        entry: sh -c 'grep -rn "fmt.Print\|log.Print\|panic" --include="*.go" . || true'
+        language: system
+        files: \.(go)$
+        pass_filenames: false

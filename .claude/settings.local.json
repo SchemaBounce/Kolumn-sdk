@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make fmt:*)",
+      "Bash(gofmt:*)",
+      "Bash(go get:*)",
+      "Bash(go vet:*)",
+      "mcp__sequential-thinking__sequentialthinking",
+      "Bash(go build:*)",
+      "Bash(go test:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
