@@ -37,7 +37,7 @@ type Provider interface {
 
 	// ValidateConfig validates the provider configuration using the validation framework
 	// Returns detailed validation results with errors, warnings, and fix suggestions
-	ValidateConfig(ctx context.Context, config map[string]interface{}) *ValidationResult
+	ValidateConfig(ctx context.Context, config map[string]interface{}) *ConfigValidationResult
 
 	// CallFunction executes a provider function with unified dispatch
 	// Supports function names: CreateResource, ReadResource, UpdateResource, DeleteResource, etc.
@@ -162,10 +162,10 @@ type Validation struct {
 
 // EnhancedValidation provides advanced validation rules using the validation framework
 type EnhancedValidation struct {
-	Rules       []ValidationRule `json:"rules"`                 // Validation rules from framework
-	Suggestions []string         `json:"suggestions,omitempty"` // Fix suggestions
-	Examples    []string         `json:"examples,omitempty"`    // Valid examples
-	DocLinks    []string         `json:"doc_links,omitempty"`   // Documentation links
+	Rules       []ConfigValidationRule `json:"rules"`                 // Validation rules from framework
+	Suggestions []string               `json:"suggestions,omitempty"` // Fix suggestions
+	Examples    []string               `json:"examples,omitempty"`    // Valid examples
+	DocLinks    []string               `json:"doc_links,omitempty"`   // Documentation links
 }
 
 // ConfigSchema defines the provider's configuration schema
@@ -1005,7 +1005,7 @@ type ProviderMetrics struct {
 // =============================================================================
 
 // ValidateConfig validates provider configuration using the validation framework
-func (s *Schema) ValidateConfig(config map[string]interface{}) *ValidationResult {
+func (s *Schema) ValidateConfig(config map[string]interface{}) *ConfigValidationResult {
 	validator := NewValidator(s.Name)
 
 	// Convert legacy ObjectType properties to validation rules
@@ -1025,9 +1025,9 @@ func (s *Schema) ValidateConfig(config map[string]interface{}) *ValidationResult
 	return validator.Validate(config)
 }
 
-// convertPropertyToValidationRule converts a Property to a ValidationRule
-func (s *Schema) convertPropertyToValidationRule(objType, propName string, prop *Property) ValidationRule {
-	rule := ValidationRule{
+// convertPropertyToValidationRule converts a Property to a ConfigValidationRule
+func (s *Schema) convertPropertyToValidationRule(objType, propName string, prop *Property) ConfigValidationRule {
+	rule := ConfigValidationRule{
 		Field:       fmt.Sprintf("%s.%s", objType, propName),
 		Type:        prop.Type,
 		Description: prop.Description,
@@ -1081,11 +1081,11 @@ func (s *Schema) convertPropertyToValidationRule(objType, propName string, prop 
 }
 
 // convertResourceTypeToValidationRules converts ResourceTypeDefinition to validation rules
-func (s *Schema) convertResourceTypeToValidationRules(resourceType ResourceTypeDefinition) []ValidationRule {
-	rules := []ValidationRule{}
+func (s *Schema) convertResourceTypeToValidationRules(resourceType ResourceTypeDefinition) []ConfigValidationRule {
+	rules := []ConfigValidationRule{}
 
 	// Add basic resource type validation
-	rules = append(rules, ValidationRule{
+	rules = append(rules, ConfigValidationRule{
 		Field:       "resource_type",
 		Required:    true,
 		Type:        "string",
@@ -1099,7 +1099,7 @@ func (s *Schema) convertResourceTypeToValidationRules(resourceType ResourceTypeD
 	// Parse ConfigSchema JSON if available
 	if len(resourceType.ConfigSchema) > 0 {
 		// This would require JSON schema parsing - for now, add basic validation
-		rules = append(rules, ValidationRule{
+		rules = append(rules, ConfigValidationRule{
 			Field:       fmt.Sprintf("%s.config", resourceType.Name),
 			Required:    false,
 			Type:        "map",
@@ -1111,10 +1111,10 @@ func (s *Schema) convertResourceTypeToValidationRules(resourceType ResourceTypeD
 }
 
 // AddValidationRule adds a validation rule to a property
-func (p *Property) AddValidationRule(rule ValidationRule) {
+func (p *Property) AddValidationRule(rule ConfigValidationRule) {
 	if p.Enhanced == nil {
 		p.Enhanced = &EnhancedValidation{
-			Rules: []ValidationRule{},
+			Rules: []ConfigValidationRule{},
 		}
 	}
 	p.Enhanced.Rules = append(p.Enhanced.Rules, rule)
@@ -1145,12 +1145,12 @@ func (p *Property) AddDocumentationLink(link string) {
 }
 
 // GetValidationRules returns all validation rules for this property
-func (p *Property) GetValidationRules() []ValidationRule {
-	rules := []ValidationRule{}
+func (p *Property) GetValidationRules() []ConfigValidationRule {
+	rules := []ConfigValidationRule{}
 
 	// Convert basic validation to rule
 	if p.Validation != nil {
-		rule := ValidationRule{
+		rule := ConfigValidationRule{
 			Required:   p.Validation.Required,
 			Type:       p.Type,
 			Pattern:    p.Validation.Pattern,
@@ -1225,17 +1225,17 @@ func (bp *BaseProvider) GetSchema() *Schema {
 }
 
 // AddValidationRule adds a validation rule to the provider
-func (bp *BaseProvider) AddValidationRule(rule ValidationRule) {
+func (bp *BaseProvider) AddValidationRule(rule ConfigValidationRule) {
 	bp.validator.AddRule(rule)
 }
 
 // AddValidationRules adds multiple validation rules to the provider
-func (bp *BaseProvider) AddValidationRules(rules []ValidationRule) {
+func (bp *BaseProvider) AddValidationRules(rules []ConfigValidationRule) {
 	bp.validator.AddRules(rules)
 }
 
 // ValidateConfig provides a default implementation using the schema and validation framework
-func (bp *BaseProvider) ValidateConfig(ctx context.Context, config map[string]interface{}) *ValidationResult {
+func (bp *BaseProvider) ValidateConfig(ctx context.Context, config map[string]interface{}) *ConfigValidationResult {
 	// Store config for potential use by other methods
 	bp.config = config
 
@@ -1257,7 +1257,7 @@ func (bp *BaseProvider) ValidateConfig(ctx context.Context, config map[string]in
 // addCommonValidationRules adds basic validation rules for common provider fields
 func (bp *BaseProvider) addCommonValidationRules() {
 	// Add validation for common provider configuration fields
-	commonRules := []ValidationRule{
+	commonRules := []ConfigValidationRule{
 		{
 			Field:       "host",
 			Type:        "string",

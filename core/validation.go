@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-// ValidationRule defines validation constraints for provider configuration fields
-type ValidationRule struct {
+// ConfigValidationRule defines validation constraints for provider configuration fields
+type ConfigValidationRule struct {
 	Field       string                  `json:"field"`
 	Required    bool                    `json:"required"`
 	Type        string                  `json:"type"`        // "string", "int", "bool", "float", "slice", "map"
@@ -38,8 +38,8 @@ type FieldError struct {
 	Code       string      `json:"code"`             // Error code for programmatic handling
 }
 
-// ValidationResult contains the results of validating a configuration
-type ValidationResult struct {
+// ConfigValidationResult contains the results of validating a configuration
+type ConfigValidationResult struct {
 	Valid       bool         `json:"valid"`
 	Errors      []FieldError `json:"errors"`
 	Warnings    []FieldError `json:"warnings"`
@@ -48,33 +48,33 @@ type ValidationResult struct {
 
 // Validator provides configuration validation capabilities for providers
 type Validator struct {
-	rules        []ValidationRule
+	rules        []ConfigValidationRule
 	providerName string
 }
 
 // NewValidator creates a new validator for a provider
 func NewValidator(providerName string) *Validator {
 	return &Validator{
-		rules:        []ValidationRule{},
+		rules:        []ConfigValidationRule{},
 		providerName: providerName,
 	}
 }
 
 // AddRule adds a validation rule to the validator
-func (v *Validator) AddRule(rule ValidationRule) *Validator {
+func (v *Validator) AddRule(rule ConfigValidationRule) *Validator {
 	v.rules = append(v.rules, rule)
 	return v
 }
 
 // AddRules adds multiple validation rules to the validator
-func (v *Validator) AddRules(rules []ValidationRule) *Validator {
+func (v *Validator) AddRules(rules []ConfigValidationRule) *Validator {
 	v.rules = append(v.rules, rules...)
 	return v
 }
 
 // Validate validates a configuration map against the defined rules
-func (v *Validator) Validate(config map[string]interface{}) *ValidationResult {
-	result := &ValidationResult{
+func (v *Validator) Validate(config map[string]interface{}) *ConfigValidationResult {
+	result := &ConfigValidationResult{
 		Valid:    true,
 		Errors:   []FieldError{},
 		Warnings: []FieldError{},
@@ -120,7 +120,7 @@ func (v *Validator) Validate(config map[string]interface{}) *ValidationResult {
 }
 
 // validateField validates a single field against its rule
-func (v *Validator) validateField(rule ValidationRule, config map[string]interface{}) *FieldError {
+func (v *Validator) validateField(rule ConfigValidationRule, config map[string]interface{}) *FieldError {
 	value, exists := config[rule.Field]
 
 	// Check if required field is missing
@@ -231,7 +231,7 @@ func (v *Validator) validateField(rule ValidationRule, config map[string]interfa
 }
 
 // validateType validates the type of a field value
-func (v *Validator) validateType(rule ValidationRule, value interface{}) error {
+func (v *Validator) validateType(rule ConfigValidationRule, value interface{}) error {
 	valueType := reflect.TypeOf(value)
 	if valueType == nil {
 		return fmt.Errorf("field '%s' cannot be nil", rule.Field)
@@ -283,7 +283,7 @@ func (v *Validator) validateType(rule ValidationRule, value interface{}) error {
 }
 
 // validateRange validates min/max constraints
-func (v *Validator) validateRange(rule ValidationRule, value interface{}) error {
+func (v *Validator) validateRange(rule ConfigValidationRule, value interface{}) error {
 	switch rule.Type {
 	case "string":
 		if str, ok := value.(string); ok {
@@ -346,7 +346,7 @@ func (v *Validator) validateRange(rule ValidationRule, value interface{}) error 
 }
 
 // validateEnum validates that a value is in the allowed enum values
-func (v *Validator) validateEnum(rule ValidationRule, value interface{}) error {
+func (v *Validator) validateEnum(rule ConfigValidationRule, value interface{}) error {
 	strValue := fmt.Sprintf("%v", value)
 	for _, enumValue := range rule.Enum {
 		if strValue == enumValue {
@@ -407,13 +407,13 @@ func (v *Validator) generateFixCommands(errors []FieldError) []string {
 
 // ValidationRuleBuilder provides a fluent interface for building validation rules
 type ValidationRuleBuilder struct {
-	rule ValidationRule
+	rule ConfigValidationRule
 }
 
 // NewValidationRule creates a new validation rule builder
 func NewValidationRule(field string) *ValidationRuleBuilder {
 	return &ValidationRuleBuilder{
-		rule: ValidationRule{
+		rule: ConfigValidationRule{
 			Field: field,
 		},
 	}
@@ -492,7 +492,7 @@ func (b *ValidationRuleBuilder) Description(desc string) *ValidationRuleBuilder 
 }
 
 // Build returns the constructed validation rule
-func (b *ValidationRuleBuilder) Build() ValidationRule {
+func (b *ValidationRuleBuilder) Build() ConfigValidationRule {
 	return b.rule
 }
 
