@@ -35,6 +35,10 @@ type Provider interface {
 	// Schema returns the provider's schema definition
 	Schema() (*Schema, error)
 
+	// ValidateConfig validates the provider configuration using the validation framework
+	// Returns detailed validation results with errors, warnings, and fix suggestions
+	ValidateConfig(ctx context.Context, config map[string]interface{}) *ValidationResult
+
 	// CallFunction executes a provider function with unified dispatch
 	// Supports function names: CreateResource, ReadResource, UpdateResource, DeleteResource, etc.
 	CallFunction(ctx context.Context, function string, input []byte) ([]byte, error)
@@ -76,6 +80,7 @@ type Schema struct {
 	Protocol    string `json:"protocol"`
 	Type        string `json:"type"`
 	Description string `json:"description"`
+	DisplayName string `json:"display_name,omitempty"` // Optional display name for UI prefixes (e.g., "POSTGRES", "MYSQL")
 
 	// Core compatibility fields - these match the core ProviderSchema structure
 	SupportedFunctions []string                 `json:"supported_functions"` // Functions this provider implements
@@ -132,21 +137,35 @@ const (
 
 // Property defines a property of an object type
 type Property struct {
-	Type        string      `json:"type"` // "string", "integer", "boolean", etc.
-	Description string      `json:"description"`
-	Default     interface{} `json:"default,omitempty"`
-	Examples    []string    `json:"examples,omitempty"`
-	Validation  *Validation `json:"validation,omitempty"`
+	Type        string              `json:"type"` // "string", "integer", "boolean", etc.
+	Description string              `json:"description"`
+	Default     interface{}         `json:"default,omitempty"`
+	Examples    []string            `json:"examples,omitempty"`
+	Validation  *Validation         `json:"validation,omitempty"`
+	Enhanced    *EnhancedValidation `json:"enhanced_validation,omitempty"` // Advanced validation
 }
 
 // Validation defines validation rules for a property
 type Validation struct {
-	Pattern   string        `json:"pattern,omitempty"` // regex pattern
-	MinLength *int          `json:"min_length,omitempty"`
-	MaxLength *int          `json:"max_length,omitempty"`
-	Minimum   *float64      `json:"minimum,omitempty"`
-	Maximum   *float64      `json:"maximum,omitempty"`
-	Enum      []interface{} `json:"enum,omitempty"` // allowed values
+	Pattern     string        `json:"pattern,omitempty"` // regex pattern
+	MinLength   *int          `json:"min_length,omitempty"`
+	MaxLength   *int          `json:"max_length,omitempty"`
+	Minimum     *float64      `json:"minimum,omitempty"`
+	Maximum     *float64      `json:"maximum,omitempty"`
+	Enum        []interface{} `json:"enum,omitempty"`        // allowed values
+	Required    bool          `json:"required,omitempty"`    // whether field is required
+	ErrorMsg    string        `json:"error_msg,omitempty"`   // custom error message
+	Suggestion  string        `json:"suggestion,omitempty"`  // suggestion for fixing errors
+	Example     string        `json:"example,omitempty"`     // example of valid value
+	Description string        `json:"description,omitempty"` // validation description
+}
+
+// EnhancedValidation provides advanced validation rules using the validation framework
+type EnhancedValidation struct {
+	Rules       []ValidationRule `json:"rules"`                 // Validation rules from framework
+	Suggestions []string         `json:"suggestions,omitempty"` // Fix suggestions
+	Examples    []string         `json:"examples,omitempty"`    // Valid examples
+	DocLinks    []string         `json:"doc_links,omitempty"`   // Documentation links
 }
 
 // ConfigSchema defines the provider's configuration schema
@@ -979,4 +998,320 @@ type ProviderMetrics struct {
 	LastRequest         time.Time              `json:"last_request"`
 	CollectedAt         time.Time              `json:"collected_at"`
 	Metadata            map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// =============================================================================
+// VALIDATION FRAMEWORK INTEGRATION
+// =============================================================================
+
+// ValidateConfig validates provider configuration using the validation framework
+func (s *Schema) ValidateConfig(config map[string]interface{}) *ValidationResult {
+	validator := NewValidator(s.Name)
+
+	// Convert legacy ObjectType properties to validation rules
+	for objTypeName, objType := range s.CreateObjects {
+		for propName, prop := range objType.Properties {
+			rule := s.convertPropertyToValidationRule(objTypeName, propName, prop)
+			validator.AddRule(rule)
+		}
+	}
+
+	// Convert ResourceTypeDefinition config schemas to validation rules
+	for _, resourceType := range s.ResourceTypes {
+		rules := s.convertResourceTypeToValidationRules(resourceType)
+		validator.AddRules(rules)
+	}
+
+	return validator.Validate(config)
+}
+
+// convertPropertyToValidationRule converts a Property to a ValidationRule
+func (s *Schema) convertPropertyToValidationRule(objType, propName string, prop *Property) ValidationRule {
+	rule := ValidationRule{
+		Field:       fmt.Sprintf("%s.%s", objType, propName),
+		Type:        prop.Type,
+		Description: prop.Description,
+		Default:     prop.Default,
+	}
+
+	// Convert basic validation if present
+	if prop.Validation != nil {
+		rule.Pattern = prop.Validation.Pattern
+		rule.Enum = make([]string, len(prop.Validation.Enum))
+		for i, v := range prop.Validation.Enum {
+			rule.Enum[i] = fmt.Sprintf("%v", v)
+		}
+		rule.Required = prop.Validation.Required
+		rule.ErrorMsg = prop.Validation.ErrorMsg
+		rule.Suggestion = prop.Validation.Suggestion
+		rule.Example = prop.Validation.Example
+
+		// Convert range constraints
+		if prop.Validation.MinLength != nil {
+			rule.Min = *prop.Validation.MinLength
+		}
+		if prop.Validation.MaxLength != nil {
+			rule.Max = *prop.Validation.MaxLength
+		}
+		if prop.Validation.Minimum != nil {
+			rule.Min = *prop.Validation.Minimum
+		}
+		if prop.Validation.Maximum != nil {
+			rule.Max = *prop.Validation.Maximum
+		}
+	}
+
+	// Use enhanced validation if available
+	if prop.Enhanced != nil && len(prop.Enhanced.Rules) > 0 {
+		// Use the first enhanced rule as the primary rule
+		enhancedRule := prop.Enhanced.Rules[0]
+		rule.Required = enhancedRule.Required
+		rule.Type = enhancedRule.Type
+		rule.Pattern = enhancedRule.Pattern
+		rule.Min = enhancedRule.Min
+		rule.Max = enhancedRule.Max
+		rule.Enum = enhancedRule.Enum
+		rule.ErrorMsg = enhancedRule.ErrorMsg
+		rule.Suggestion = enhancedRule.Suggestion
+		rule.Example = enhancedRule.Example
+		rule.Custom = enhancedRule.Custom
+	}
+
+	return rule
+}
+
+// convertResourceTypeToValidationRules converts ResourceTypeDefinition to validation rules
+func (s *Schema) convertResourceTypeToValidationRules(resourceType ResourceTypeDefinition) []ValidationRule {
+	rules := []ValidationRule{}
+
+	// Add basic resource type validation
+	rules = append(rules, ValidationRule{
+		Field:       "resource_type",
+		Required:    true,
+		Type:        "string",
+		Enum:        []string{resourceType.Name},
+		Description: fmt.Sprintf("Must be '%s' for %s resources", resourceType.Name, resourceType.Description),
+		ErrorMsg:    fmt.Sprintf("Invalid resource type, expected '%s'", resourceType.Name),
+		Suggestion:  fmt.Sprintf("Use resource_type = \"%s\"", resourceType.Name),
+		Example:     fmt.Sprintf("resource_type = \"%s\"", resourceType.Name),
+	})
+
+	// Parse ConfigSchema JSON if available
+	if len(resourceType.ConfigSchema) > 0 {
+		// This would require JSON schema parsing - for now, add basic validation
+		rules = append(rules, ValidationRule{
+			Field:       fmt.Sprintf("%s.config", resourceType.Name),
+			Required:    false,
+			Type:        "map",
+			Description: fmt.Sprintf("Configuration for %s", resourceType.Description),
+		})
+	}
+
+	return rules
+}
+
+// AddValidationRule adds a validation rule to a property
+func (p *Property) AddValidationRule(rule ValidationRule) {
+	if p.Enhanced == nil {
+		p.Enhanced = &EnhancedValidation{
+			Rules: []ValidationRule{},
+		}
+	}
+	p.Enhanced.Rules = append(p.Enhanced.Rules, rule)
+}
+
+// AddValidationSuggestion adds a validation suggestion
+func (p *Property) AddValidationSuggestion(suggestion string) {
+	if p.Enhanced == nil {
+		p.Enhanced = &EnhancedValidation{}
+	}
+	p.Enhanced.Suggestions = append(p.Enhanced.Suggestions, suggestion)
+}
+
+// AddValidationExample adds a validation example
+func (p *Property) AddValidationExample(example string) {
+	if p.Enhanced == nil {
+		p.Enhanced = &EnhancedValidation{}
+	}
+	p.Enhanced.Examples = append(p.Enhanced.Examples, example)
+}
+
+// AddDocumentationLink adds a documentation link
+func (p *Property) AddDocumentationLink(link string) {
+	if p.Enhanced == nil {
+		p.Enhanced = &EnhancedValidation{}
+	}
+	p.Enhanced.DocLinks = append(p.Enhanced.DocLinks, link)
+}
+
+// GetValidationRules returns all validation rules for this property
+func (p *Property) GetValidationRules() []ValidationRule {
+	rules := []ValidationRule{}
+
+	// Convert basic validation to rule
+	if p.Validation != nil {
+		rule := ValidationRule{
+			Required:   p.Validation.Required,
+			Type:       p.Type,
+			Pattern:    p.Validation.Pattern,
+			Enum:       make([]string, len(p.Validation.Enum)),
+			ErrorMsg:   p.Validation.ErrorMsg,
+			Suggestion: p.Validation.Suggestion,
+			Example:    p.Validation.Example,
+		}
+
+		// Convert enum values
+		for i, v := range p.Validation.Enum {
+			rule.Enum[i] = fmt.Sprintf("%v", v)
+		}
+
+		// Convert range constraints
+		if p.Validation.MinLength != nil {
+			rule.Min = *p.Validation.MinLength
+		}
+		if p.Validation.MaxLength != nil {
+			rule.Max = *p.Validation.MaxLength
+		}
+		if p.Validation.Minimum != nil {
+			rule.Min = *p.Validation.Minimum
+		}
+		if p.Validation.Maximum != nil {
+			rule.Max = *p.Validation.Maximum
+		}
+
+		rules = append(rules, rule)
+	}
+
+	// Add enhanced validation rules
+	if p.Enhanced != nil {
+		rules = append(rules, p.Enhanced.Rules...)
+	}
+
+	return rules
+}
+
+// CreateValidationBuilder creates a new validation rule builder for this property
+func (p *Property) CreateValidationBuilder(field string) *ValidationRuleBuilder {
+	return NewValidationRule(field).Type(p.Type).Description(p.Description)
+}
+
+// =============================================================================
+// BASE PROVIDER IMPLEMENTATION
+// =============================================================================
+
+// BaseProvider provides default implementations for the Provider interface
+// Providers can embed this to get default behavior and only override what they need
+type BaseProvider struct {
+	schema    *Schema
+	config    map[string]interface{}
+	validator *Validator
+}
+
+// NewBaseProvider creates a new base provider instance
+func NewBaseProvider(name string) *BaseProvider {
+	return &BaseProvider{
+		validator: NewValidator(name),
+	}
+}
+
+// SetSchema sets the provider schema
+func (bp *BaseProvider) SetSchema(schema *Schema) {
+	bp.schema = schema
+}
+
+// GetSchema returns the provider schema (for use in default ValidateConfig)
+func (bp *BaseProvider) GetSchema() *Schema {
+	return bp.schema
+}
+
+// AddValidationRule adds a validation rule to the provider
+func (bp *BaseProvider) AddValidationRule(rule ValidationRule) {
+	bp.validator.AddRule(rule)
+}
+
+// AddValidationRules adds multiple validation rules to the provider
+func (bp *BaseProvider) AddValidationRules(rules []ValidationRule) {
+	bp.validator.AddRules(rules)
+}
+
+// ValidateConfig provides a default implementation using the schema and validation framework
+func (bp *BaseProvider) ValidateConfig(ctx context.Context, config map[string]interface{}) *ValidationResult {
+	// Store config for potential use by other methods
+	bp.config = config
+
+	// If we have a schema, use it for validation
+	if bp.schema != nil {
+		return bp.schema.ValidateConfig(config)
+	}
+
+	// If no schema but we have validation rules, use the validator directly
+	if len(bp.validator.rules) > 0 {
+		return bp.validator.Validate(config)
+	}
+
+	// Default: basic validation - just check for common fields
+	bp.addCommonValidationRules()
+	return bp.validator.Validate(config)
+}
+
+// addCommonValidationRules adds basic validation rules for common provider fields
+func (bp *BaseProvider) addCommonValidationRules() {
+	// Add validation for common provider configuration fields
+	commonRules := []ValidationRule{
+		{
+			Field:       "host",
+			Type:        "string",
+			Required:    false, // Not all providers need host
+			Description: "Provider host address",
+			Custom:      ValidateHost,
+			Suggestion:  "Provide a valid hostname or IP address",
+			Example:     "host = \"localhost\"",
+		},
+		{
+			Field:       "port",
+			Type:        "int",
+			Required:    false, // Not all providers need port
+			Description: "Provider port number",
+			Custom:      ValidatePort,
+			Suggestion:  "Provide a valid port number (1-65535)",
+			Example:     "port = 5432",
+		},
+		{
+			Field:       "database",
+			Type:        "string",
+			Required:    false, // Not all providers need database
+			Description: "Database name",
+			Custom:      ValidateDatabaseName,
+			Suggestion:  "Provide a valid database name",
+			Example:     "database = \"mydb\"",
+		},
+		{
+			Field:       "username",
+			Type:        "string",
+			Required:    false, // Not all providers need username
+			Description: "Username for authentication",
+			Suggestion:  "Provide a valid username",
+			Example:     "username = \"postgres\"",
+		},
+		{
+			Field:       "password",
+			Type:        "string",
+			Required:    false, // Not all providers need password
+			Description: "Password for authentication",
+			Suggestion:  "Provide a valid password",
+			Example:     "password = \"secret\"",
+		},
+	}
+
+	bp.validator.AddRules(commonRules)
+}
+
+// GetConfig returns the current provider configuration
+func (bp *BaseProvider) GetConfig() map[string]interface{} {
+	return bp.config
+}
+
+// GetValidator returns the provider's validator instance
+func (bp *BaseProvider) GetValidator() *Validator {
+	return bp.validator
 }
