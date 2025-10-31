@@ -9,10 +9,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/schemabounce/kolumn/sdk/core"
 	"github.com/schemabounce/kolumn/sdk/create"
 	"github.com/schemabounce/kolumn/sdk/discover"
+	"github.com/schemabounce/kolumn/sdk/helpers/logging"
 	"github.com/schemabounce/kolumn/sdk/helpers/security"
 )
 
@@ -69,7 +71,8 @@ func (p *SimpleProvider) Configure(ctx context.Context, config map[string]interf
 
 	// SECURITY: Sanitize endpoint for logging (remove credentials if present)
 	sanitizedEndpoint := sanitizeEndpoint(endpoint)
-	log.Printf("Configuring provider with endpoint: %s", sanitizedEndpoint)
+	logging.ConfigLogger.Info("Configuring provider with endpoint: %s", sanitizedEndpoint)
+	logging.ConfigLogger.JSONDebug("Provider configuration", config)
 
 	// Create internal config object from map
 	p.config = NewSimpleConfig(config)
@@ -112,7 +115,7 @@ func (p *SimpleProvider) CallFunction(ctx context.Context, function string, inpu
 
 // Close implements the core.Provider interface
 func (p *SimpleProvider) Close() error {
-	log.Println("Closing simple provider")
+	logging.ProviderLogger.Info("Closing simple provider")
 	return nil
 }
 
@@ -132,7 +135,7 @@ func (p *SimpleProvider) registerCreateObjects() {
 	// Register the handler with the schema
 	err := p.createRegistry.RegisterHandler("table", tableHandler, tableSchema)
 	if err != nil {
-		log.Printf("Failed to register table handler: %v", err)
+		logging.RegistryLogger.Error("Failed to register table handler: %v", err)
 	}
 }
 
@@ -152,7 +155,7 @@ func (p *SimpleProvider) registerDiscoverObjects() {
 	// Register the discoverer with the schema
 	err := p.discoverRegistry.RegisterHandler("existing_tables", tableDiscoverer, discoverySchema)
 	if err != nil {
-		log.Printf("Failed to register table discoverer: %v", err)
+		logging.RegistryLogger.Error("Failed to register table discoverer: %v", err)
 	}
 }
 
@@ -160,7 +163,7 @@ func (p *SimpleProvider) registerDiscoverObjects() {
 type SimpleTableHandler struct{}
 
 func (h *SimpleTableHandler) Create(ctx context.Context, req *create.CreateRequest) (*create.CreateResponse, error) {
-	log.Printf("Creating table: %s", req.Name)
+	logging.LogRequest(logging.HandlerLogger, "CreateTable", req)
 
 	return &create.CreateResponse{
 		State: map[string]interface{}{
@@ -172,7 +175,7 @@ func (h *SimpleTableHandler) Create(ctx context.Context, req *create.CreateReque
 }
 
 func (h *SimpleTableHandler) Read(ctx context.Context, req *create.ReadRequest) (*create.ReadResponse, error) {
-	log.Printf("Reading table: %s", req.Name)
+	logging.LogRequest(logging.HandlerLogger, "ReadTable", req)
 
 	return &create.ReadResponse{
 		State: map[string]interface{}{
@@ -183,28 +186,34 @@ func (h *SimpleTableHandler) Read(ctx context.Context, req *create.ReadRequest) 
 }
 
 func (h *SimpleTableHandler) Update(ctx context.Context, req *create.UpdateRequest) (*create.UpdateResponse, error) {
-	log.Printf("Updating table: %s", req.Name)
+	logging.LogRequest(logging.HandlerLogger, "UpdateTable", req)
 
-	return &create.UpdateResponse{
+	resp := &create.UpdateResponse{
 		NewState: map[string]interface{}{
 			"name":   req.Config["name"],
 			"status": "updated",
 		},
-	}, nil
+	}
+
+	logging.LogResponse(logging.HandlerLogger, "UpdateTable", resp, nil)
+	return resp, nil
 }
 
 func (h *SimpleTableHandler) Delete(ctx context.Context, req *create.DeleteRequest) (*create.DeleteResponse, error) {
-	log.Printf("Deleting table: %s", req.Name)
+	logging.LogRequest(logging.HandlerLogger, "DeleteTable", req)
 
-	return &create.DeleteResponse{
+	resp := &create.DeleteResponse{
 		Success: true,
-	}, nil
+	}
+
+	logging.LogResponse(logging.HandlerLogger, "DeleteTable", resp, nil)
+	return resp, nil
 }
 
 func (h *SimpleTableHandler) Plan(ctx context.Context, req *create.PlanRequest) (*create.PlanResponse, error) {
-	log.Printf("Planning changes for table: %s", req.Name)
+	logging.LogRequest(logging.HandlerLogger, "PlanTable", req)
 
-	return &create.PlanResponse{
+	resp := &create.PlanResponse{
 		Changes: []create.PlannedChange{
 			{
 				Action:          "create",
@@ -222,14 +231,18 @@ func (h *SimpleTableHandler) Plan(ctx context.Context, req *create.PlanRequest) 
 			RequiresReplace: false,
 			RiskLevel:       "low",
 		},
-	}, nil
+	}
+
+	logging.LogResponse(logging.HandlerLogger, "PlanTable", resp, nil)
+	return resp, nil
 }
 
 // SimpleTableDiscoverer demonstrates implementing DISCOVER object operations
 type SimpleTableDiscoverer struct{}
 
 func (d *SimpleTableDiscoverer) Scan(ctx context.Context, req *discover.ScanRequest) (*discover.ScanResponse, error) {
-	log.Printf("Scanning for existing tables")
+	start := time.Now()
+	logging.DiscoveryLogger.Info("Scanning for existing tables")
 
 	// Mock discovery results
 	objects := []*discover.DiscoveredObject{
@@ -265,18 +278,21 @@ func (d *SimpleTableDiscoverer) Scan(ctx context.Context, req *discover.ScanRequ
 		},
 	}
 
-	return &discover.ScanResponse{
+	resp := &discover.ScanResponse{
 		Objects: objects,
 		Summary: &discover.ScanSummary{
 			TotalObjects: len(objects),
 			ObjectTypes:  map[string]int{"table": len(objects)},
-			Duration:     "1.2s",
+			Duration:     time.Since(start).String(),
 		},
-	}, nil
+	}
+
+	logging.LogDiscoveryResult(logging.DiscoveryLogger, "table", len(objects), time.Since(start))
+	return resp, nil
 }
 
 func (d *SimpleTableDiscoverer) Analyze(ctx context.Context, req *discover.AnalyzeRequest) (*discover.AnalyzeResponse, error) {
-	log.Printf("Analyzing %d objects", len(req.Objects))
+	logging.DiscoveryLogger.InfoWithFields("Starting analysis", "object_count", len(req.Objects))
 
 	results := make([]*discover.AnalysisResult, len(req.Objects))
 	for i, obj := range req.Objects {
@@ -292,7 +308,7 @@ func (d *SimpleTableDiscoverer) Analyze(ctx context.Context, req *discover.Analy
 		}
 	}
 
-	return &discover.AnalyzeResponse{
+	resp := &discover.AnalyzeResponse{
 		Results: results,
 		Insights: []*discover.Insight{
 			{
@@ -303,11 +319,16 @@ func (d *SimpleTableDiscoverer) Analyze(ctx context.Context, req *discover.Analy
 				Confidence:  0.8,
 			},
 		},
-	}, nil
+	}
+
+	logging.DiscoveryLogger.InfoWithFields("Analysis completed",
+		"results_count", len(results),
+		"insights_count", len(resp.Insights))
+	return resp, nil
 }
 
 func (d *SimpleTableDiscoverer) Query(ctx context.Context, req *discover.QueryRequest) (*discover.QueryResponse, error) {
-	log.Printf("Querying for objects matching: %s", req.Query)
+	logging.DiscoveryLogger.InfoWithFields("Starting query", "query", req.Query)
 
 	// Mock search results
 	objects := []*discover.DiscoveredObject{
@@ -324,11 +345,17 @@ func (d *SimpleTableDiscoverer) Query(ctx context.Context, req *discover.QueryRe
 		},
 	}
 
-	return &discover.QueryResponse{
+	resp := &discover.QueryResponse{
 		Objects:       objects,
 		TotalCount:    1,
 		ExecutionTime: "0.5s",
-	}, nil
+	}
+
+	logging.DiscoveryLogger.InfoWithFields("Query completed",
+		"results_count", len(objects),
+		"total_count", resp.TotalCount,
+		"execution_time", resp.ExecutionTime)
+	return resp, nil
 }
 
 // main demonstrates how to use the SDK to create and serve a provider
@@ -344,21 +371,25 @@ func main() {
 
 	ctx := context.Background()
 	if err := provider.Configure(ctx, config); err != nil {
-		log.Fatalf("Failed to configure provider: %v", err)
+		logging.ProviderLogger.Error("Failed to configure provider: %v", err)
+		log.Fatalf("Configuration failed")
 	}
 
 	// Example: Get provider schema
 	schema, err := provider.Schema()
 	if err != nil {
-		log.Fatalf("Failed to get schema: %v", err)
+		logging.SchemaLogger.Error("Failed to get schema: %v", err)
+		log.Fatalf("Schema generation failed")
 	}
 
-	log.Printf("Provider: %s v%s", schema.Name, schema.Version)
-	log.Printf("Supported functions: %v", schema.SupportedFunctions)
-	log.Printf("Resource types: %d", len(schema.ResourceTypes))
+	logging.ProviderLogger.InfoWithFields("Provider initialized",
+		"name", schema.Name,
+		"version", schema.Version,
+		"functions", len(schema.SupportedFunctions),
+		"resource_types", len(schema.ResourceTypes))
 
 	// Test the new unified dispatch pattern
-	log.Println("\nTesting unified dispatch pattern...")
+	logging.ProviderLogger.Info("Testing unified dispatch pattern")
 
 	// Test CreateResource function (new core pattern)
 	createRequest := map[string]interface{}{
@@ -373,20 +404,20 @@ func main() {
 	requestJSON, _ := json.Marshal(createRequest)
 	response, err := provider.CallFunction(ctx, "CreateResource", requestJSON)
 	if err != nil {
-		log.Printf("CreateResource test failed: %v", err)
+		logging.HandlerLogger.Error("CreateResource test failed: %v", err)
 	} else {
-		log.Printf("CreateResource test succeeded: %s", string(response))
+		logging.LogResponse(logging.HandlerLogger, "CreateResource test", string(response), nil)
 	}
 
 	// Test Ping function (new core pattern)
 	pingResponse, err := provider.CallFunction(ctx, "Ping", []byte("{}"))
 	if err != nil {
-		log.Printf("Ping test failed: %v", err)
+		logging.HandlerLogger.Error("Ping test failed: %v", err)
 	} else {
-		log.Printf("Ping test succeeded: %s", string(pingResponse))
+		logging.LogResponse(logging.HandlerLogger, "Ping test", string(pingResponse), nil)
 	}
 
-	log.Println("\nSDK compatibility demonstration completed successfully!")
+	logging.ProviderLogger.Info("SDK compatibility demonstration completed successfully")
 }
 
 // SimpleConfig implements the core.Config interface for this example
