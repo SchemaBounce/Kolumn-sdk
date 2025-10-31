@@ -7,7 +7,12 @@
       "Bash(go vet:*)",
       "mcp__sequential-thinking__sequentialthinking",
       "Bash(go build:*)",
-      "Bash(go test:*)"
+      "Bash(go test:*)",
+      "Read(//mnt/c/git/Kolumn/**)",
+      "Bash(find:*)",
+      "Bash(go run:*)",
+      "Bash(go mod:*)",
+      "Bash(go clean:*)"
     ],
     "deny": [],
     "ask": []
