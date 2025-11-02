@@ -26,6 +26,13 @@ const (
 )
 
 // Provider is the core interface that all Kolumn providers must implement.
+//
+// ⚠️ CRITICAL: This interface MUST have exactly 4 methods - no more, no less.
+// This enforces the 4-method RPC pattern that maintains compatibility with Kolumn core.
+//
+// ValidateConfig was intentionally REMOVED to maintain interface purity.
+// Use validation helpers within Configure() instead of separate validation methods.
+//
 // This is the minimum interface - dead simple to get started.
 type Provider interface {
 	// Configure sets up the provider with the given configuration
@@ -34,10 +41,6 @@ type Provider interface {
 
 	// Schema returns the provider's schema definition
 	Schema() (*Schema, error)
-
-	// ValidateConfig validates the provider configuration using the validation framework
-	// Returns detailed validation results with errors, warnings, and fix suggestions
-	ValidateConfig(ctx context.Context, config map[string]interface{}) *ConfigValidationResult
 
 	// CallFunction executes a provider function with unified dispatch
 	// Supports function names: CreateResource, ReadResource, UpdateResource, DeleteResource, etc.
@@ -1219,7 +1222,7 @@ func (bp *BaseProvider) SetSchema(schema *Schema) {
 	bp.schema = schema
 }
 
-// GetSchema returns the provider schema (for use in default ValidateConfig)
+// GetSchema returns the provider schema (for use in internal validation)
 func (bp *BaseProvider) GetSchema() *Schema {
 	return bp.schema
 }
@@ -1234,8 +1237,8 @@ func (bp *BaseProvider) AddValidationRules(rules []ConfigValidationRule) {
 	bp.validator.AddRules(rules)
 }
 
-// ValidateConfig provides a default implementation using the schema and validation framework
-func (bp *BaseProvider) ValidateConfig(ctx context.Context, config map[string]interface{}) *ConfigValidationResult {
+// ValidateConfiguration provides a helper method for internal configuration validation using the schema and validation framework
+func (bp *BaseProvider) ValidateConfiguration(ctx context.Context, config map[string]interface{}) *ConfigValidationResult {
 	// Store config for potential use by other methods
 	bp.config = config
 

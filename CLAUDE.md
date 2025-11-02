@@ -16,8 +16,9 @@ This is the **Kolumn Provider SDK** - a Go SDK library for building external pro
 - No cmd/ directories or main.go files in the SDK itself
 - Follows standard Go SDK patterns (AWS SDK, HashiCorp Provider SDK, etc.)
 
-### 2. **Simple Interface Design**
-- Single 4-method `Provider` interface (clean and minimal)
+### 2. **4-Method RPC Interface Design**
+- **EXACTLY 4 methods** - Configure, Schema, CallFunction, Close (enforced architectural constraint)
+- **No method bloat** - ValidateConfig was intentionally removed to maintain interface purity
 - Documentation generated from `Schema()` method over RPC
 
 ### 3. **Create/Discover Object Categorization**
@@ -50,6 +51,78 @@ type Provider interface {
 - `Schema()` returns enhanced schema with `SupportedFunctions`, `ResourceTypes`, and `ConfigSchema` fields
 
 The `Schema()` method returns all information needed for documentation generation over RPC.
+
+## ⚠️ CRITICAL: ValidateConfig Method Removal
+
+**ARCHITECTURAL DECISION: ValidateConfig was intentionally removed from the Provider interface.**
+
+### Why ValidateConfig Was Removed
+
+**Problem:** ValidateConfig violated the 4-method RPC pattern by adding a 5th method:
+```go
+// ❌ INCORRECT - This was the 5-method interface (REMOVED)
+type Provider interface {
+    Configure(ctx context.Context, config map[string]interface{}) error    // RPC 1
+    Schema() (*Schema, error)                                              // RPC 2
+    ValidateConfig(ctx context.Context, config map[string]interface{}) ... // RPC 3 (REMOVED)
+    CallFunction(ctx context.Context, function string, input []byte) ...   // RPC 4
+    Close() error                                                          // RPC 5
+}
+```
+
+**Solution:** Validation moved to internal helpers, maintaining 4-method pattern:
+```go
+// ✅ CORRECT - Clean 4-method RPC interface
+type Provider interface {
+    Configure(ctx context.Context, config map[string]interface{}) error  // RPC 1
+    Schema() (*Schema, error)                                            // RPC 2
+    CallFunction(ctx context.Context, function string, input []byte) ... // RPC 3
+    Close() error                                                        // RPC 4
+}
+```
+
+### Architecture Benefits
+
+1. **Interface Purity** - Exactly 4 RPC methods, no bloat
+2. **Core Compatibility** - Matches Kolumn core's provider contract
+3. **Performance** - No separate RPC call overhead for validation
+4. **Separation of Concerns** - Validation is internal implementation detail
+
+### Migration Guide for Providers
+
+**Old Pattern (DEPRECATED):**
+```go
+func (p *Provider) ValidateConfig(ctx context.Context, config map[string]interface{}) *ConfigValidationResult {
+    // This method no longer exists in interface
+}
+```
+
+**New Pattern (RECOMMENDED):**
+```go
+func (p *Provider) Configure(ctx context.Context, config map[string]interface{}) error {
+    // Validate internally within Configure
+    if err := p.validateConfiguration(ctx, config); err != nil {
+        return fmt.Errorf("configuration validation failed: %w", err)
+    }
+
+    // Apply configuration
+    return p.applyConfig(config)
+}
+
+// Helper method (not part of interface)
+func (p *Provider) validateConfiguration(ctx context.Context, config map[string]interface{}) error {
+    // Use SDK validation helpers
+    return validation.ValidateConfig(config, p.getValidators())
+}
+```
+
+### Available Validation Helpers
+
+1. **BaseProvider.ValidateConfiguration()** - Helper method for internal use
+2. **Schema.ValidateConfig()** - Schema-based validation
+3. **validation.ValidateConfig()** - Flexible validation framework
+
+**Note:** These are helper methods, NOT part of the Provider interface.
 
 ## Unified Function Dispatch (Core Compatibility)
 

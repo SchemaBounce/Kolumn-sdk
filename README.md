@@ -10,7 +10,7 @@ The Kolumn Provider SDK enables developers to build external providers that inte
 
 - **🏗️ Library Pattern** - Import as Go library
 - **🎯 Create/Discover Architecture** - Clear separation of concerns
-- **✨ Simple Interface** - Just 4 methods to implement
+- **✨ Simple 4-Method Interface** - Core RPC pattern with exactly 4 methods ([see details](./4-METHOD-PATTERN.md))
 - **📈 Progressive Disclosure** - Start simple, add complexity as needed
 
 ## 🚀 SDK Compatibility Status
@@ -61,7 +61,7 @@ type MyProvider struct {
 }
 
 // Implement the 4-method core.Provider interface:
-func (p *MyProvider) Configure(ctx context.Context, config core.Config) error { }
+func (p *MyProvider) Configure(ctx context.Context, config map[string]interface{}) error { }
 func (p *MyProvider) Schema() (*core.Schema, error) { }
 func (p *MyProvider) CallFunction(ctx context.Context, function string, input []byte) ([]byte, error) { }
 func (p *MyProvider) Close() error { }
@@ -91,18 +91,33 @@ See `examples/simple/provider.go` for a complete working example showing all pat
 
 ## Architecture
 
-### Core Interface
+### Core Interface - The 4-Method RPC Pattern
 
-All providers implement a simple 4-method interface:
+**⚠️ CRITICAL: Providers must implement EXACTLY 4 methods - no more, no less.**
+
+All providers implement this precise 4-method interface:
 
 ```go
 type Provider interface {
-    Configure(ctx context.Context, config Config) error
+    // Configure sets up the provider with configuration (RPC call 1)
+    Configure(ctx context.Context, config map[string]interface{}) error
+
+    // Schema returns provider capabilities and documentation (RPC call 2)
     Schema() (*Schema, error)
+
+    // CallFunction handles unified resource operations (RPC call 3)
     CallFunction(ctx context.Context, function string, input []byte) ([]byte, error)
+
+    // Close cleans up provider resources (RPC call 4)
     Close() error
 }
 ```
+
+**Why exactly 4 methods?**
+- **Clean RPC interface** - Simple, predictable communication protocol
+- **Core compatibility** - Matches Kolumn core's provider contract exactly
+- **No method bloat** - Avoids interface pollution and complexity
+- **Unified dispatch** - All operations route through `CallFunction` for consistency
 
 ### Create/Discover Pattern
 
@@ -131,9 +146,57 @@ discoverRegistry.RegisterHandler("existing_tables", discoverer, discoverySchema)
 - **`helpers/validation/`** - Configuration validation helpers
 - **`examples/simple/`** - Working example provider
 
-## Validation Helpers
+## Configuration Validation
 
-Use the validation package for configuration validation:
+### ⚠️ Important: ValidateConfig Method Removed
+
+**The ValidateConfig method was removed from the Provider interface to maintain the 4-method RPC pattern.**
+
+**Why was it removed?**
+- **Interface purity** - Keeps Provider interface to exactly 4 RPC methods
+- **Internal concern** - Configuration validation should happen within `Configure()`
+- **No RPC overhead** - Validation doesn't need separate network calls
+
+### ✅ Validation Alternatives
+
+**1. Validate within Configure() method:**
+```go
+func (p *MyProvider) Configure(ctx context.Context, config map[string]interface{}) error {
+    // Use helper methods for validation
+    if err := p.validateConfiguration(ctx, config); err != nil {
+        return fmt.Errorf("configuration validation failed: %w", err)
+    }
+
+    // Apply configuration
+    return p.applyConfig(config)
+}
+
+// Helper method for internal validation
+func (p *MyProvider) validateConfiguration(ctx context.Context, config map[string]interface{}) error {
+    validators := validation.CreateValidator{}.DatabaseConnectionConfig()
+    return validation.ValidateConfig(config, validators)
+}
+```
+
+**2. Use BaseProvider helper (optional):**
+```go
+type MyProvider struct {
+    *core.BaseProvider
+}
+
+func (p *MyProvider) Configure(ctx context.Context, config map[string]interface{}) error {
+    // Use BaseProvider validation helper
+    if result := p.ValidateConfiguration(ctx, config); !result.IsValid() {
+        return fmt.Errorf("configuration invalid: %v", result.Errors)
+    }
+
+    return p.applyConfig(config)
+}
+```
+
+### Validation Helpers
+
+Use the validation package for robust configuration validation:
 
 ```go
 import "github.com/schemabounce/kolumn/sdk/helpers/validation"
@@ -142,6 +205,11 @@ import "github.com/schemabounce/kolumn/sdk/helpers/validation"
 validators := validation.CreateValidator{}.DatabaseConnectionConfig()
 err := validation.ValidateConfig(config, validators)
 ```
+
+### 📚 Complete Validation Guide
+
+For comprehensive validation patterns, migration guides, and best practices, see:
+**[docs/VALIDATION_GUIDE.md](./docs/VALIDATION_GUIDE.md)**
 
 ## Development
 
