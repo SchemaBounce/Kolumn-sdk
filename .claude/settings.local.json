@@ -12,7 +12,8 @@
       "Bash(find:*)",
       "Bash(go run:*)",
       "Bash(go mod:*)",
-      "Bash(go clean:*)"
+      "Bash(go clean:*)",
+      "Read(//mnt/c/git/Kolumn-providers-database/**)"
     ],
     "deny": [],
     "ask": []
