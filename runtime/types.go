@@ -32,11 +32,11 @@ type Capabilities struct {
 
 // ResourceKind captures metadata about a resource the runtime can manage.
 type ResourceKind struct {
-	Type        string                 `json:"type"
-	Description string                 `json:"description,omitempty"`
-	Operations  []string               `json:"operations,omitempty"`
-	Config      map[string]any         `json:"config_schema,omitempty"`
-	State       map[string]any         `json:"state_schema,omitempty"`
+	Type        string         `json:"type"`
+	Description string         `json:"description,omitempty"`
+	Operations  []string       `json:"operations,omitempty"`
+	Config      map[string]any `json:"config_schema,omitempty"`
+	State       map[string]any `json:"state_schema,omitempty"`
 }
 
 // PlanRequest contains desired state and options for planning.

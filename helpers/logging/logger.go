@@ -121,12 +121,16 @@ func (l *Logger) updateEnabledLevels() {
 		delete(l.enabled, level)
 	}
 
-	// Always enable info, warn, and error
-	l.enabled[LevelInfo] = true
+	// Always enable warn and error
 	l.enabled[LevelWarn] = true
 	l.enabled[LevelError] = true
 
-	// Enable debug based on global debug setting or component-specific level
+	// Enable info when logger level is Info or Debug
+	if l.level == LevelInfo || l.level == LevelDebug {
+		l.enabled[LevelInfo] = true
+	}
+
+	// Enable debug based on configuration or level
 	if globalConfig.EnableDebug || l.level == LevelDebug {
 		l.enabled[LevelDebug] = true
 	}
@@ -221,23 +225,72 @@ func (l *Logger) log(level Level, format string, args ...interface{}) {
 }
 
 // Info logs an info message (always enabled)
-func (l *Logger) Info(format string, args ...interface{}) {
+func (l *Logger) Info(args ...interface{}) {
+	l.logAdaptive(LevelInfo, args...)
+}
+
+// Infof logs an info message (printf-style).
+func (l *Logger) Infof(format string, args ...interface{}) {
 	l.log(LevelInfo, format, args...)
 }
 
 // Debug logs a debug message (only enabled in debug mode)
-func (l *Logger) Debug(format string, args ...interface{}) {
+func (l *Logger) Debug(args ...interface{}) {
+	l.logAdaptive(LevelDebug, args...)
+}
+
+// Debugf logs a debug message (printf-style).
+func (l *Logger) Debugf(format string, args ...interface{}) {
 	l.log(LevelDebug, format, args...)
 }
 
 // Warn logs a warning message (always enabled)
-func (l *Logger) Warn(format string, args ...interface{}) {
+func (l *Logger) Warn(args ...interface{}) {
+	l.logAdaptive(LevelWarn, args...)
+}
+
+// Warnf logs a warning message (printf-style).
+func (l *Logger) Warnf(format string, args ...interface{}) {
 	l.log(LevelWarn, format, args...)
 }
 
 // Error logs an error message (always enabled)
-func (l *Logger) Error(format string, args ...interface{}) {
+func (l *Logger) Error(args ...interface{}) {
+	l.logAdaptive(LevelError, args...)
+}
+
+// Errorf logs an error message (printf-style).
+func (l *Logger) Errorf(format string, args ...interface{}) {
 	l.log(LevelError, format, args...)
+}
+
+func (l *Logger) logAdaptive(level Level, args ...interface{}) {
+	if !l.isEnabled(level) || len(args) == 0 {
+		return
+	}
+
+	message, ok := args[0].(string)
+	if !ok {
+		message = fmt.Sprint(args[0])
+	}
+
+	rest := args[1:]
+	if len(rest) == 0 {
+		l.log(level, "%s", message)
+		return
+	}
+
+	if strings.Contains(message, "%") {
+		l.log(level, message, rest...)
+		return
+	}
+
+	if len(rest)%2 != 0 {
+		l.log(level, "%s %v", message, rest)
+		return
+	}
+
+	l.logWithFields(level, message, rest...)
 }
 
 // InfoWithFields logs an info message with structured fields
