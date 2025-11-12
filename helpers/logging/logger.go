@@ -1,11 +1,14 @@
 package logging
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/schemabounce/kolumn/sdk/helpers/ui"
 )
 
 // Level represents the logging level
@@ -70,6 +73,8 @@ var (
 	RegistryLogger   *Logger
 	DispatchLogger   *Logger
 	SchemaLogger     *Logger
+
+	consoleLogger = log.New(os.Stdout, "", 0)
 )
 
 func init() {
@@ -121,12 +126,16 @@ func (l *Logger) updateEnabledLevels() {
 		delete(l.enabled, level)
 	}
 
-	// Always enable info, warn, and error
-	l.enabled[LevelInfo] = true
+	// Always enable warn and error
 	l.enabled[LevelWarn] = true
 	l.enabled[LevelError] = true
 
-	// Enable debug based on global debug setting or component-specific level
+	// Enable info when logger level is Info or Debug
+	if l.level == LevelInfo || l.level == LevelDebug {
+		l.enabled[LevelInfo] = true
+	}
+
+	// Enable debug based on configuration or level
 	if globalConfig.EnableDebug || l.level == LevelDebug {
 		l.enabled[LevelDebug] = true
 	}
@@ -137,9 +146,11 @@ func Configure(config *Configuration) {
 	configMu.Lock()
 	defer configMu.Unlock()
 
-	if config.DefaultLevel != 0 {
-		globalConfig.DefaultLevel = config.DefaultLevel
+	if config == nil {
+		return
 	}
+
+	globalConfig.DefaultLevel = config.DefaultLevel
 
 	globalConfig.EnableDebug = config.EnableDebug
 
@@ -179,6 +190,21 @@ func loadEnvironmentConfig() {
 		globalConfig.ComponentLevels["handler"] = LevelDebug
 		globalConfig.ComponentLevels["discovery"] = LevelDebug
 	}
+
+	// Allow explicit log level override for provider plugins
+	if providerLevel := os.Getenv("KOLUMN_PROVIDER_LOG_LEVEL"); providerLevel != "" {
+		switch strings.ToLower(providerLevel) {
+		case "debug":
+			globalConfig.DefaultLevel = LevelDebug
+			globalConfig.EnableDebug = true
+		case "info":
+			globalConfig.DefaultLevel = LevelInfo
+		case "warn", "warning":
+			globalConfig.DefaultLevel = LevelWarn
+		case "error":
+			globalConfig.DefaultLevel = LevelError
+		}
+	}
 }
 
 // updateAllLoggers updates the configuration for all existing loggers
@@ -215,29 +241,78 @@ func (l *Logger) log(level Level, format string, args ...interface{}) {
 		return
 	}
 
-	message := fmt.Sprintf(format, args...)
-	logLine := fmt.Sprintf("[%s][%s] %s", level.String(), l.component, message)
-	log.Println(logLine)
+	message := fmt.Sprintf(format, sanitizeArgs(args)...)
+	logLine := formatLogLine(level, l.component, message)
+	consoleLogger.Println(logLine)
 }
 
 // Info logs an info message (always enabled)
-func (l *Logger) Info(format string, args ...interface{}) {
+func (l *Logger) Info(args ...interface{}) {
+	l.logAdaptive(LevelInfo, args...)
+}
+
+// Infof logs an info message (printf-style).
+func (l *Logger) Infof(format string, args ...interface{}) {
 	l.log(LevelInfo, format, args...)
 }
 
 // Debug logs a debug message (only enabled in debug mode)
-func (l *Logger) Debug(format string, args ...interface{}) {
+func (l *Logger) Debug(args ...interface{}) {
+	l.logAdaptive(LevelDebug, args...)
+}
+
+// Debugf logs a debug message (printf-style).
+func (l *Logger) Debugf(format string, args ...interface{}) {
 	l.log(LevelDebug, format, args...)
 }
 
 // Warn logs a warning message (always enabled)
-func (l *Logger) Warn(format string, args ...interface{}) {
+func (l *Logger) Warn(args ...interface{}) {
+	l.logAdaptive(LevelWarn, args...)
+}
+
+// Warnf logs a warning message (printf-style).
+func (l *Logger) Warnf(format string, args ...interface{}) {
 	l.log(LevelWarn, format, args...)
 }
 
 // Error logs an error message (always enabled)
-func (l *Logger) Error(format string, args ...interface{}) {
+func (l *Logger) Error(args ...interface{}) {
+	l.logAdaptive(LevelError, args...)
+}
+
+// Errorf logs an error message (printf-style).
+func (l *Logger) Errorf(format string, args ...interface{}) {
 	l.log(LevelError, format, args...)
+}
+
+func (l *Logger) logAdaptive(level Level, args ...interface{}) {
+	if !l.isEnabled(level) || len(args) == 0 {
+		return
+	}
+
+	message, ok := args[0].(string)
+	if !ok {
+		message = fmt.Sprint(args[0])
+	}
+
+	rest := args[1:]
+	if len(rest) == 0 {
+		l.log(level, "%s", message)
+		return
+	}
+
+	if strings.Contains(message, "%") {
+		l.log(level, message, rest...)
+		return
+	}
+
+	if len(rest)%2 != 0 {
+		l.log(level, "%s %v", message, rest)
+		return
+	}
+
+	l.logWithFields(level, message, rest...)
 }
 
 // InfoWithFields logs an info message with structured fields
@@ -280,8 +355,8 @@ func (l *Logger) logWithFields(level Level, message string, fields ...interface{
 	for i := 0; i < len(fields); i += 2 {
 		if i+1 < len(fields) {
 			key := fmt.Sprintf("%v", fields[i])
-			value := fmt.Sprintf("%v", fields[i+1])
-			fieldPairs = append(fieldPairs, fmt.Sprintf("%s=%s", key, value))
+			value := sanitizeFieldValue(key, fields[i+1])
+			fieldPairs = append(fieldPairs, fmt.Sprintf("%s=%v", key, value))
 		}
 	}
 
@@ -289,8 +364,8 @@ func (l *Logger) logWithFields(level Level, message string, fields ...interface{
 		message = fmt.Sprintf("%s %s", message, strings.Join(fieldPairs, " "))
 	}
 
-	logLine := fmt.Sprintf("[%s][%s] %s", level.String(), l.component, message)
-	log.Println(logLine)
+	logLine := formatLogLine(level, l.component, message)
+	consoleLogger.Println(logLine)
 }
 
 // JSONDebug logs JSON data only in debug mode with human-readable context
@@ -299,7 +374,13 @@ func (l *Logger) JSONDebug(context string, jsonData interface{}) {
 		return
 	}
 
-	l.Debug("%s: %+v", context, jsonData)
+	if serialized, err := json.Marshal(jsonData); err == nil {
+		l.Debug("%s: %s", context, string(serialized))
+		return
+	}
+
+	humanReadable := JSONToHuman(jsonData, context)
+	l.Debug("%s", humanReadable)
 }
 
 // OperationStart logs the beginning of an operation
@@ -315,6 +396,71 @@ func (l *Logger) OperationComplete(operation string, target string) {
 // OperationFailed logs a failed operation
 func (l *Logger) OperationFailed(operation string, target string, err error) {
 	l.Error("Failed %s operation on %s: %v", operation, target, err)
+}
+
+func formatLogLine(level Level, component string, message string) string {
+	options := ui.GetStyleOptions()
+	componentName := component
+	if componentName == "" {
+		componentName = "logger"
+	}
+	return ui.FormatLogLine(level.String(), componentName, message, options)
+}
+
+var sensitiveKeyTokens = []string{
+	"password",
+	"secret",
+	"token",
+	"credential",
+	"auth",
+	"access_token",
+	"api_key",
+	"secret_key",
+	"encryption_key",
+}
+
+func sanitizeArgs(args []interface{}) []interface{} {
+	if len(args) == 0 {
+		return args
+	}
+	sanitized := make([]interface{}, len(args))
+	for i, arg := range args {
+		if str, ok := arg.(string); ok {
+			sanitized[i] = sanitizeStringInput(str)
+		} else {
+			sanitized[i] = arg
+		}
+	}
+	return sanitized
+}
+
+func sanitizeFieldValue(key string, value interface{}) interface{} {
+	if shouldRedactKey(key) {
+		return "<redacted>"
+	}
+	if str, ok := value.(string); ok {
+		return sanitizeStringInput(str)
+	}
+	return value
+}
+
+func shouldRedactKey(key string) bool {
+	lower := strings.ToLower(key)
+	for _, token := range sensitiveKeyTokens {
+		if strings.Contains(lower, token) {
+			return true
+		}
+	}
+	return false
+}
+
+func sanitizeStringInput(input string) string {
+	for idx, r := range input {
+		if r == '\n' || r == '\r' || r == '\t' || r == 0 {
+			return input[:idx]
+		}
+	}
+	return input
 }
 
 // IsDebugEnabled returns true if debug logging is enabled for this logger
@@ -336,16 +482,20 @@ func (l *Logger) GetComponent() string {
 
 // EnableDebug enables debug logging globally
 func EnableDebug() {
-	Configure(&Configuration{
-		EnableDebug: true,
-	})
+	configMu.Lock()
+	globalConfig.EnableDebug = true
+	configMu.Unlock()
+	updateAllLoggers()
 }
 
 // DisableDebug disables debug logging globally
 func DisableDebug() {
-	Configure(&Configuration{
-		EnableDebug: false,
-	})
+	configMu.Lock()
+	globalConfig.EnableDebug = false
+	globalConfig.DefaultLevel = LevelInfo
+	globalConfig.ComponentLevels = make(map[string]Level)
+	configMu.Unlock()
+	updateAllLoggers()
 }
 
 // EnableComponentDebug enables debug logging for a specific component

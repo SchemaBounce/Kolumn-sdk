@@ -343,6 +343,7 @@ func TestLogRequest(t *testing.T) {
 }
 
 func TestLogResponse(t *testing.T) {
+	withCleanConfig(t)
 	logger, capture := NewTestLogger(t, "response", false)
 
 	// Test successful response

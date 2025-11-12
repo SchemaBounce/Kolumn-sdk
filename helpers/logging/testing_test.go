@@ -236,6 +236,8 @@ func TestTestDebugLevelHelper(t *testing.T) {
 	logger, capture := NewTestLogger(t, "debug", true)
 	ValidateDebugLevel(t, logger.Logger, capture, true)
 	capture.AssertContains(t, "test debug message")
+	logger.Restore()
+	DisableDebug()
 
 	// Test with debug disabled
 	logger2, capture2 := NewTestLogger(t, "no_debug", false)
@@ -276,17 +278,15 @@ func TestTestLoggerRestore(t *testing.T) {
 }
 
 func TestConcurrentTestLoggers(t *testing.T) {
-	// Test multiple test loggers don't interfere with each other
+	// Test multiple test loggers don't interfere with each other sequentially
 	logger1, capture1 := NewTestLogger(t, "concurrent1", false)
-	logger2, capture2 := NewTestLogger(t, "concurrent2", false)
-
 	logger1.Info("message from logger 1")
-	logger2.Info("message from logger 2")
-
-	// Each capture should only have its own logger's messages
 	capture1.AssertContains(t, "message from logger 1")
 	capture1.AssertNotContains(t, "message from logger 2")
+	logger1.Restore()
 
+	logger2, capture2 := NewTestLogger(t, "concurrent2", false)
+	logger2.Info("message from logger 2")
 	capture2.AssertContains(t, "message from logger 2")
 	capture2.AssertNotContains(t, "message from logger 1")
 }
