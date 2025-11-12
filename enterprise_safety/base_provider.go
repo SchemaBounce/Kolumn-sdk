@@ -69,10 +69,10 @@ func (b *BaseSafetyProvider) AssessOperationRisk(ctx context.Context, req *RiskA
 // CreateBackup provides a default backup implementation (no-op)
 func (b *BaseSafetyProvider) CreateBackup(ctx context.Context, req *BackupRequest) (*BackupResponse, error) {
 	return &BackupResponse{
-		BackupID:  req.BackupID,
-		Provider:  b.providerType,
-		CreatedAt: time.Now(),
-		Objects:   []*BackupObject{},
+		BackupID:   req.BackupID,
+		Provider:   b.providerType,
+		CreatedAt:  time.Now(),
+		Objects:    []*BackupObject{},
 		BackupSize: 0,
 		IntegrityCheck: &BackupIntegrityResult{
 			Valid:     true,

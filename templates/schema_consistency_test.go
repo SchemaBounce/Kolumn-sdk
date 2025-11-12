@@ -112,7 +112,26 @@ func (p *MyProvider) Schema() (*sdktesting.ProviderSchema, error) {
 				ConfigSchema: json.RawMessage(`{"type": "object", "properties": {"name": {"type": "string"}}}`),
 				StateSchema:  json.RawMessage(`{"type": "object", "properties": {"id": {"type": "string"}, "name": {"type": "string"}}}`),
 			},
-			// Add more resource types
+			{
+				Name:        "my_user",
+				Description: "User management resource",
+				Operations:  []string{"create", "read", "update", "delete"},
+				ConfigSchema: json.RawMessage(`{
+					"type": "object",
+					"properties": {
+						"email": {"type": "string"},
+						"role": {"type": "string"}
+					}
+				}`),
+				StateSchema: json.RawMessage(`{
+					"type": "object",
+					"properties": {
+						"id": {"type": "string"},
+						"email": {"type": "string"},
+						"role": {"type": "string"}
+					}
+				}`),
+			},
 		},
 		ConfigSchema: json.RawMessage(`{
 			"type": "object",

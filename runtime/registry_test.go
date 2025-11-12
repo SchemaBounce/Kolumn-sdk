@@ -8,12 +8,20 @@ import (
 
 type noopRuntime struct{}
 
-func (noopRuntime) Init(context.Context, InitRequest) error                      { return nil }
-func (noopRuntime) Capabilities(context.Context) (Capabilities, error)           { return Capabilities{Provider: "noop"}, nil }
-func (noopRuntime) Plan(context.Context, PlanRequest) (PlanResponse, error)      { return PlanResponse{Provider: "noop"}, nil }
-func (noopRuntime) Apply(context.Context, ApplyRequest) (ApplyResult, error)     { return ApplyResult{Success: true}, nil }
-func (noopRuntime) Inspect(context.Context, InspectRequest) (InspectResult, error) { return InspectResult{State: map[string]any{}}, nil }
-func (noopRuntime) Close(context.Context) error                                 { return nil }
+func (noopRuntime) Init(context.Context, InitRequest) error { return nil }
+func (noopRuntime) Capabilities(context.Context) (Capabilities, error) {
+	return Capabilities{Provider: "noop"}, nil
+}
+func (noopRuntime) Plan(context.Context, PlanRequest) (PlanResponse, error) {
+	return PlanResponse{Provider: "noop"}, nil
+}
+func (noopRuntime) Apply(context.Context, ApplyRequest) (ApplyResult, error) {
+	return ApplyResult{Success: true}, nil
+}
+func (noopRuntime) Inspect(context.Context, InspectRequest) (InspectResult, error) {
+	return InspectResult{State: map[string]any{}}, nil
+}
+func (noopRuntime) Close(context.Context) error { return nil }
 
 func TestRegistryRegisterAndLookup(t *testing.T) {
 	defer Clear()

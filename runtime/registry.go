@@ -10,7 +10,7 @@ import (
 type Factory func() (Runtime, error)
 
 var (
-	registryMu sync.RWMutex
+	registryMu      sync.RWMutex
 	runtimeRegistry = make(map[string]Factory)
 )
 

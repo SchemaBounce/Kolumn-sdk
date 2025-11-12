@@ -19,34 +19,34 @@ type CascadeDeleteTestFramework struct {
 
 // CascadeTestMetrics tracks cascade testing performance
 type CascadeTestMetrics struct {
-	TotalTests           int
-	PassedTests          int
-	FailedTests          int
+	TotalTests             int
+	PassedTests            int
+	FailedTests            int
 	OrphanedResourcesFound int
-	IntegrityViolations  int
-	TotalTestDuration    time.Duration
-	AverageTestDuration  time.Duration
+	IntegrityViolations    int
+	TotalTestDuration      time.Duration
+	AverageTestDuration    time.Duration
 }
 
 // CascadeDeleteTestResult represents the result of a cascade delete test
 type CascadeDeleteTestResult struct {
-	TestName             string                 `json:"test_name"`
-	TestType             string                 `json:"test_type"`
-	ProviderType         string                 `json:"provider_type"`
-	StartTime            time.Time              `json:"start_time"`
-	Duration             time.Duration          `json:"duration"`
-	Success              bool                   `json:"success"`
-	PrimaryObject        ObjectInfo             `json:"primary_object"`
-	DependentObjects     []ObjectInfo           `json:"dependent_objects"`
-	PreDeleteCounts      map[string]int         `json:"pre_delete_counts"`
-	PostDeleteCounts     map[string]int         `json:"post_delete_counts"`
-	ExpectedBehavior     CascadeExpectation     `json:"expected_behavior"`
-	ActualBehavior       CascadeActual          `json:"actual_behavior"`
-	OrphanedResources    []OrphanedResource     `json:"orphaned_resources"`
-	IntegrityViolations  []IntegrityViolation   `json:"integrity_violations"`
-	Error                string                 `json:"error"`
-	Recommendations      []string               `json:"recommendations"`
-	Metadata             map[string]interface{} `json:"metadata"`
+	TestName            string                 `json:"test_name"`
+	TestType            string                 `json:"test_type"`
+	ProviderType        string                 `json:"provider_type"`
+	StartTime           time.Time              `json:"start_time"`
+	Duration            time.Duration          `json:"duration"`
+	Success             bool                   `json:"success"`
+	PrimaryObject       ObjectInfo             `json:"primary_object"`
+	DependentObjects    []ObjectInfo           `json:"dependent_objects"`
+	PreDeleteCounts     map[string]int         `json:"pre_delete_counts"`
+	PostDeleteCounts    map[string]int         `json:"post_delete_counts"`
+	ExpectedBehavior    CascadeExpectation     `json:"expected_behavior"`
+	ActualBehavior      CascadeActual          `json:"actual_behavior"`
+	OrphanedResources   []OrphanedResource     `json:"orphaned_resources"`
+	IntegrityViolations []IntegrityViolation   `json:"integrity_violations"`
+	Error               string                 `json:"error"`
+	Recommendations     []string               `json:"recommendations"`
+	Metadata            map[string]interface{} `json:"metadata"`
 }
 
 // ObjectInfo represents detailed information about a database object
@@ -78,29 +78,29 @@ type CascadeExpectation struct {
 
 // CascadeActual represents what actually happened during cascade delete
 type CascadeActual struct {
-	CascadeExecuted      bool                   `json:"cascade_executed"`
-	ObjectsDeleted       []string               `json:"objects_deleted"`
-	ObjectsRemaining     []string               `json:"objects_remaining"`
-	ConstraintsViolated  []string               `json:"constraints_violated"`
+	CascadeExecuted       bool                   `json:"cascade_executed"`
+	ObjectsDeleted        []string               `json:"objects_deleted"`
+	ObjectsRemaining      []string               `json:"objects_remaining"`
+	ConstraintsViolated   []string               `json:"constraints_violated"`
 	TransactionRolledBack bool                   `json:"transaction_rolled_back"`
-	ErrorsEncountered    []string               `json:"errors_encountered"`
-	CleanupExecuted      bool                   `json:"cleanup_executed"`
-	ResultDetails        map[string]interface{} `json:"result_details"`
+	ErrorsEncountered     []string               `json:"errors_encountered"`
+	CleanupExecuted       bool                   `json:"cleanup_executed"`
+	ResultDetails         map[string]interface{} `json:"result_details"`
 }
 
 // OrphanedResource represents a resource left without its parent
 type OrphanedResource struct {
-	Type            string    `json:"type"`
-	Name            string    `json:"name"`
-	DatabaseName    string    `json:"database_name"`
-	SchemaName      string    `json:"schema_name"`
-	ParentType      string    `json:"parent_type"`
-	ParentName      string    `json:"parent_name"`
-	OrphanedCount   int       `json:"orphaned_count"`
-	OrphanedSince   time.Time `json:"orphaned_since"`
-	Severity        string    `json:"severity"` // LOW, MEDIUM, HIGH, CRITICAL
-	CleanupAction   string    `json:"cleanup_action"`
-	CanAutoCleanup  bool      `json:"can_auto_cleanup"`
+	Type           string    `json:"type"`
+	Name           string    `json:"name"`
+	DatabaseName   string    `json:"database_name"`
+	SchemaName     string    `json:"schema_name"`
+	ParentType     string    `json:"parent_type"`
+	ParentName     string    `json:"parent_name"`
+	OrphanedCount  int       `json:"orphaned_count"`
+	OrphanedSince  time.Time `json:"orphaned_since"`
+	Severity       string    `json:"severity"` // LOW, MEDIUM, HIGH, CRITICAL
+	CleanupAction  string    `json:"cleanup_action"`
+	CanAutoCleanup bool      `json:"can_auto_cleanup"`
 }
 
 // IntegrityViolation represents a data integrity violation
@@ -116,24 +116,24 @@ type IntegrityViolation struct {
 
 // CascadeTestScenario defines a cascade delete test scenario
 type CascadeTestScenario struct {
-	Name                string
-	Description         string
-	PrimaryObject       ObjectInfo
-	DependentObjects    []ObjectInfo
-	TestData            map[string]interface{}
-	ExpectedBehavior    CascadeExpectation
-	SetupSQL            []string
-	CleanupSQL          []string
-	ValidationQueries   []ValidationQuery
+	Name              string
+	Description       string
+	PrimaryObject     ObjectInfo
+	DependentObjects  []ObjectInfo
+	TestData          map[string]interface{}
+	ExpectedBehavior  CascadeExpectation
+	SetupSQL          []string
+	CleanupSQL        []string
+	ValidationQueries []ValidationQuery
 }
 
 // ValidationQuery represents a query to validate cascade behavior
 type ValidationQuery struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Query       string `json:"query"`
+	Name           string      `json:"name"`
+	Description    string      `json:"description"`
+	Query          string      `json:"query"`
 	ExpectedResult interface{} `json:"expected_result"`
-	Tolerance   float64 `json:"tolerance"`
+	Tolerance      float64     `json:"tolerance"`
 }
 
 // NewCascadeDeleteTestFramework creates a new cascade delete test framework
@@ -395,8 +395,8 @@ func (f *CascadeDeleteTestFramework) analyzeCascadeBehavior(preCount, postCount 
 		}
 
 		actual.ResultDetails[key] = map[string]int{
-			"before": preCnt,
-			"after":  postCnt,
+			"before":  preCnt,
+			"after":   postCnt,
 			"deleted": preCnt - postCnt,
 		}
 	}
@@ -700,10 +700,10 @@ func (f *CascadeDeleteTestFramework) canAutoCleanup(objectType string) bool {
 // GenerateReport generates a comprehensive cascade delete test report
 func (f *CascadeDeleteTestFramework) GenerateReport() CascadeTestReport {
 	report := CascadeTestReport{
-		ProviderType:  f.ProviderType,
-		GeneratedAt:   time.Now(),
-		TestResults:   f.TestResults,
-		Metrics:       f.Metrics,
+		ProviderType: f.ProviderType,
+		GeneratedAt:  time.Now(),
+		TestResults:  f.TestResults,
+		Metrics:      f.Metrics,
 	}
 
 	// Calculate success rate

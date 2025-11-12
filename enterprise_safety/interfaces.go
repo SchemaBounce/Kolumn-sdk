@@ -115,15 +115,15 @@ const (
 type DatabaseFeature string
 
 const (
-	FeatureTransactions      DatabaseFeature = "TRANSACTIONS"
-	FeatureForeignKeys       DatabaseFeature = "FOREIGN_KEYS"
-	FeatureConstraints       DatabaseFeature = "CONSTRAINTS"
-	FeatureIndexes           DatabaseFeature = "INDEXES"
-	FeatureViews             DatabaseFeature = "VIEWS"
-	FeatureFunctions         DatabaseFeature = "FUNCTIONS"
-	FeatureTriggers          DatabaseFeature = "TRIGGERS"
-	FeaturePartitioning      DatabaseFeature = "PARTITIONING"
-	FeatureReplication       DatabaseFeature = "REPLICATION"
-	FeatureBackup            DatabaseFeature = "BACKUP"
+	FeatureTransactions        DatabaseFeature = "TRANSACTIONS"
+	FeatureForeignKeys         DatabaseFeature = "FOREIGN_KEYS"
+	FeatureConstraints         DatabaseFeature = "CONSTRAINTS"
+	FeatureIndexes             DatabaseFeature = "INDEXES"
+	FeatureViews               DatabaseFeature = "VIEWS"
+	FeatureFunctions           DatabaseFeature = "FUNCTIONS"
+	FeatureTriggers            DatabaseFeature = "TRIGGERS"
+	FeaturePartitioning        DatabaseFeature = "PARTITIONING"
+	FeatureReplication         DatabaseFeature = "REPLICATION"
+	FeatureBackup              DatabaseFeature = "BACKUP"
 	FeaturePointInTimeRecovery DatabaseFeature = "POINT_IN_TIME_RECOVERY"
 )

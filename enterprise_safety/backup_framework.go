@@ -16,56 +16,56 @@ import (
 
 // BackupIntegrityFramework provides cross-provider backup validation capabilities
 type BackupIntegrityFramework struct {
-	ProviderType     string
-	BackupDirectory  string
-	ValidationRules  ValidationRules
-	Metrics          FrameworkMetrics
+	ProviderType    string
+	BackupDirectory string
+	ValidationRules ValidationRules
+	Metrics         FrameworkMetrics
 }
 
 // ValidationRules define backup validation criteria
 type ValidationRules struct {
-	RequireDefinition     bool
-	RequireDataChecksum   bool
-	RequireRowCount       bool
-	RequireDependencies   bool
-	AllowableDataLoss     float64 // Percentage
-	MaxBackupAge          time.Duration
-	RequireEncryption     bool
-	RequireCompression    bool
+	RequireDefinition   bool
+	RequireDataChecksum bool
+	RequireRowCount     bool
+	RequireDependencies bool
+	AllowableDataLoss   float64 // Percentage
+	MaxBackupAge        time.Duration
+	RequireEncryption   bool
+	RequireCompression  bool
 }
 
 // FrameworkMetrics track backup framework performance
 type FrameworkMetrics struct {
-	TotalBackups          int
-	ValidBackups          int
-	CorruptedBackups      int
-	MissingDependencies   int
-	BackupSize            int64
-	ValidationDuration    time.Duration
-	LastValidationTime    time.Time
+	TotalBackups        int
+	ValidBackups        int
+	CorruptedBackups    int
+	MissingDependencies int
+	BackupSize          int64
+	ValidationDuration  time.Duration
+	LastValidationTime  time.Time
 }
 
 // BackupObject represents a backed up database object
 type BackupObject struct {
-	ID                string                 `json:"id"`
-	ProviderType      string                 `json:"provider_type"`
-	ObjectType        string                 `json:"object_type"`
-	ObjectName        string                 `json:"object_name"`
-	DatabaseName      string                 `json:"database_name"`
-	SchemaName        string                 `json:"schema_name"`
-	Definition        string                 `json:"definition"`
-	DataChecksum      string                 `json:"data_checksum"`
-	MetadataChecksum  string                 `json:"metadata_checksum"`
-	RowCount          int64                  `json:"row_count"`
-	DataSize          int64                  `json:"data_size"`
-	Dependencies      []string               `json:"dependencies"`
-	BackupTimestamp   time.Time              `json:"backup_timestamp"`
-	BackupVersion     string                 `json:"backup_version"`
-	CompressionType   string                 `json:"compression_type"`
-	EncryptionType    string                 `json:"encryption_type"`
-	ValidationStatus  ValidationStatus       `json:"validation_status"`
-	ValidationErrors  []string               `json:"validation_errors"`
-	Metadata          map[string]interface{} `json:"metadata"`
+	ID               string                 `json:"id"`
+	ProviderType     string                 `json:"provider_type"`
+	ObjectType       string                 `json:"object_type"`
+	ObjectName       string                 `json:"object_name"`
+	DatabaseName     string                 `json:"database_name"`
+	SchemaName       string                 `json:"schema_name"`
+	Definition       string                 `json:"definition"`
+	DataChecksum     string                 `json:"data_checksum"`
+	MetadataChecksum string                 `json:"metadata_checksum"`
+	RowCount         int64                  `json:"row_count"`
+	DataSize         int64                  `json:"data_size"`
+	Dependencies     []string               `json:"dependencies"`
+	BackupTimestamp  time.Time              `json:"backup_timestamp"`
+	BackupVersion    string                 `json:"backup_version"`
+	CompressionType  string                 `json:"compression_type"`
+	EncryptionType   string                 `json:"encryption_type"`
+	ValidationStatus ValidationStatus       `json:"validation_status"`
+	ValidationErrors []string               `json:"validation_errors"`
+	Metadata         map[string]interface{} `json:"metadata"`
 }
 
 // ValidationStatus represents backup validation state
@@ -80,14 +80,14 @@ type ValidationStatus struct {
 
 // CascadeDeleteTest represents cascade delete testing scenarios
 type CascadeDeleteTest struct {
-	TestName          string
-	ProviderType      string
-	PrimaryObject     ObjectReference
-	DependentObjects  []ObjectReference
-	ExpectedBehavior  CascadeBehavior
-	ActualBehavior    CascadeBehavior
-	OrphanedObjects   []ObjectReference
-	TestResult        CascadeTestResult
+	TestName         string
+	ProviderType     string
+	PrimaryObject    ObjectReference
+	DependentObjects []ObjectReference
+	ExpectedBehavior CascadeBehavior
+	ActualBehavior   CascadeBehavior
+	OrphanedObjects  []ObjectReference
+	TestResult       CascadeTestResult
 }
 
 // ObjectReference represents a database object reference
@@ -365,10 +365,10 @@ func (f *BackupIntegrityFramework) TestCascadeDelete(ctx context.Context, db *sq
 // GenerateIntegrityReport generates a comprehensive integrity report
 func (f *BackupIntegrityFramework) GenerateIntegrityReport() IntegrityReport {
 	report := IntegrityReport{
-		ProviderType:   f.ProviderType,
-		GeneratedAt:    time.Now(),
-		Framework:      f,
-		Metrics:        f.Metrics,
+		ProviderType: f.ProviderType,
+		GeneratedAt:  time.Now(),
+		Framework:    f,
+		Metrics:      f.Metrics,
 	}
 
 	// Load all backups from disk
@@ -411,18 +411,18 @@ func (f *BackupIntegrityFramework) GenerateIntegrityReport() IntegrityReport {
 
 // IntegrityReport represents a comprehensive backup integrity report
 type IntegrityReport struct {
-	ProviderType        string               `json:"provider_type"`
-	GeneratedAt         time.Time            `json:"generated_at"`
-	Framework           *BackupIntegrityFramework `json:"-"`
-	Metrics             FrameworkMetrics     `json:"metrics"`
-	TotalBackups        int                  `json:"total_backups"`
-	ValidBackups        int                  `json:"valid_backups"`
-	InvalidBackups      int                  `json:"invalid_backups"`
-	TotalDataSize       int64                `json:"total_data_size"`
-	IntegrityScore      float64              `json:"integrity_score"`
-	ValidationFailures  []ValidationFailure  `json:"validation_failures"`
-	Recommendations     []string             `json:"recommendations"`
-	Errors              []string             `json:"errors"`
+	ProviderType       string                    `json:"provider_type"`
+	GeneratedAt        time.Time                 `json:"generated_at"`
+	Framework          *BackupIntegrityFramework `json:"-"`
+	Metrics            FrameworkMetrics          `json:"metrics"`
+	TotalBackups       int                       `json:"total_backups"`
+	ValidBackups       int                       `json:"valid_backups"`
+	InvalidBackups     int                       `json:"invalid_backups"`
+	TotalDataSize      int64                     `json:"total_data_size"`
+	IntegrityScore     float64                   `json:"integrity_score"`
+	ValidationFailures []ValidationFailure       `json:"validation_failures"`
+	Recommendations    []string                  `json:"recommendations"`
+	Errors             []string                  `json:"errors"`
 }
 
 // ValidationFailure represents a backup validation failure
