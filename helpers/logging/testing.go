@@ -3,7 +3,7 @@ package logging
 import (
 	"bytes"
 	"fmt"
-	"log"
+	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -14,7 +14,7 @@ import (
 type TestLogger struct {
 	*Logger
 	buffer   *bytes.Buffer
-	original *log.Logger
+	original io.Writer
 	mu       sync.Mutex
 }
 
@@ -26,19 +26,30 @@ type TestingInterface interface {
 
 // LogCapture captures log output for testing and validation
 type LogCapture struct {
-	buffer   *bytes.Buffer
-	original *log.Logger
-	mu       sync.Mutex
+	buffer *bytes.Buffer
+	mu     sync.Mutex
 }
 
 // NewTestLogger creates a logger that captures output for testing
 func NewTestLogger(t *testing.T, component string, enableDebug bool) (*TestLogger, *LogCapture) {
-	buffer := &bytes.Buffer{}
-	original := log.Default()
+	t.Helper()
+	t.Setenv("NO_COLOR", "1")
 
-	// Redirect log output to buffer
-	log.SetOutput(buffer)
-	log.SetFlags(0)
+	buffer := &bytes.Buffer{}
+	originalWriter := consoleLogger.Writer()
+	consoleLogger.SetOutput(buffer)
+
+	originalConfig := &Configuration{
+		DefaultLevel:    globalConfig.DefaultLevel,
+		EnableDebug:     globalConfig.EnableDebug,
+		ComponentLevels: make(map[string]Level),
+	}
+	for k, v := range globalConfig.ComponentLevels {
+		originalConfig.ComponentLevels[k] = v
+	}
+
+	// Start from a clean baseline for each test logger
+	DisableDebug()
 
 	// Configure debug mode if requested
 	if enableDebug {
@@ -55,18 +66,16 @@ func NewTestLogger(t *testing.T, component string, enableDebug bool) (*TestLogge
 	testLogger := &TestLogger{
 		Logger:   logger,
 		buffer:   buffer,
-		original: original,
+		original: originalWriter,
 	}
 
 	// Create capture for assertions
-	capture := &LogCapture{
-		buffer:   buffer,
-		original: original,
-	}
+	capture := &LogCapture{buffer: buffer}
 
 	// Set cleanup function
 	t.Cleanup(func() {
 		testLogger.Restore()
+		Configure(originalConfig)
 	})
 
 	return testLogger, capture
@@ -77,8 +86,7 @@ func (tl *TestLogger) Restore() {
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
 
-	log.SetOutput(tl.original.Writer())
-	log.SetFlags(log.LstdFlags)
+	consoleLogger.SetOutput(tl.original)
 }
 
 // GetOutput returns the captured log output
@@ -119,14 +127,30 @@ func (lc *LogCapture) AssertNotContains(t TestingInterface, unexpected string) {
 
 // AssertLevel checks that the log output contains messages at the expected level
 func (lc *LogCapture) AssertLevel(t TestingInterface, level Level, component string) {
-	expected := fmt.Sprintf("[%s][%s]", level.String(), component)
-	lc.AssertContains(t, expected)
+	if lc.containsLevel(component, level) {
+		return
+	}
+	t.Errorf("Expected log output to contain level %s for component %s, but got:\n%s",
+		level.String(), component, lc.buffer.String())
 }
 
-// AssertNoLevel checks that the log output does not contain messages at the specified level
 func (lc *LogCapture) AssertNoLevel(t TestingInterface, level Level, component string) {
-	unexpected := fmt.Sprintf("[%s][%s]", level.String(), component)
-	lc.AssertNotContains(t, unexpected)
+	if lc.containsLevel(component, level) {
+		t.Errorf("Unexpected log output containing level %s for component %s:\n%s",
+			level.String(), component, lc.buffer.String())
+	}
+}
+
+func (lc *LogCapture) containsLevel(component string, level Level) bool {
+	lines := lc.GetLines()
+	levelTag := levelTagFor(level)
+	component = strings.ToUpper(component)
+	for _, line := range lines {
+		if strings.Contains(line, levelTag) && strings.Contains(line, component) {
+			return true
+		}
+	}
+	return false
 }
 
 // AssertEmpty checks that no log output was generated
@@ -167,16 +191,32 @@ func (lc *LogCapture) GetLines() []string {
 // CountLevel counts the number of log messages at the specified level
 func (lc *LogCapture) CountLevel(level Level, component string) int {
 	lines := lc.GetLines()
-	pattern := fmt.Sprintf("[%s][%s]", level.String(), component)
+	prefix := levelTagFor(level)
+	componentUpper := strings.ToUpper(component)
 	count := 0
 
 	for _, line := range lines {
-		if strings.Contains(line, pattern) {
+		if strings.Contains(line, prefix) && strings.Contains(line, componentUpper) {
 			count++
 		}
 	}
 
 	return count
+}
+
+func levelTagFor(level Level) string {
+	switch level {
+	case LevelInfo:
+		return "[KOLUMN-INFO]"
+	case LevelWarn:
+		return "[KOLUMN-WARNING]"
+	case LevelError:
+		return "[KOLUMN-ERROR]"
+	case LevelDebug:
+		return "[KOLUMN-DEBUG]"
+	default:
+		return "[KOLUMN-INFO]"
+	}
 }
 
 // GetOutput returns the complete captured output
@@ -206,13 +246,15 @@ func SetupTestLogging(t *testing.T, enableDebug bool) func() {
 	}
 
 	// Configure for testing
-	Configure(&Configuration{
-		DefaultLevel: LevelInfo,
-		EnableDebug:  enableDebug,
-		ComponentLevels: map[string]Level{
-			"test": LevelDebug,
-		},
-	})
+	newConfig := &Configuration{
+		DefaultLevel:    LevelInfo,
+		EnableDebug:     enableDebug,
+		ComponentLevels: map[string]Level{},
+	}
+	if enableDebug {
+		newConfig.ComponentLevels["test"] = LevelDebug
+	}
+	Configure(newConfig)
 
 	// Return cleanup function
 	return func() {
@@ -275,11 +317,11 @@ func ValidateStructuredLogging(t TestingInterface, logger *Logger, capture *LogC
 // ExampleLogOutput demonstrates expected log output format
 func ExampleLogOutput() {
 	// Example of what the logs should look like:
-	fmt.Println("[INFO][provider] Starting CreateResource operation on table 'users'")
-	fmt.Println("[DEBUG][handler] CreateResource request for table 'users' name=users schema=public")
-	fmt.Println("[INFO][connection] Successfully connected to postgres://user:***@localhost:5432/db")
-	fmt.Println("[DEBUG][validation] Schema validation passed for table")
-	fmt.Println("[INFO][provider] Completed CreateResource operation on table 'users' in 245ms")
-	fmt.Println("[WARN][discovery] Schema validation warnings for table: 2 warnings")
-	fmt.Println("[ERROR][provider] Failed CreateResource operation on table 'users' after 1.2s: connection failed")
+	fmt.Println("[KOLUMN-INFO] PROVIDER          │ Starting CreateResource operation on table 'users'")
+	fmt.Println("[KOLUMN-DEBUG] HANDLER           │ CreateResource request for table 'users' name=users schema=public")
+	fmt.Println("[KOLUMN-INFO] CONNECTION        │ Successfully connected to postgres://user:***@localhost:5432/db")
+	fmt.Println("[KOLUMN-DEBUG] VALIDATION        │ Schema validation passed for table")
+	fmt.Println("[KOLUMN-INFO] PROVIDER          │ Completed CreateResource operation on table 'users' in 245ms")
+	fmt.Println("[KOLUMN-WARNING] DISCOVERY        │ Schema validation warnings for table: 2 warnings")
+	fmt.Println("[KOLUMN-ERROR] PROVIDER          │ Failed CreateResource operation on table 'users' after 1.2s: connection failed")
 }

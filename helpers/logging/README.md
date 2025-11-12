@@ -74,21 +74,21 @@ The SDK provides these pre-configured loggers for common provider components:
 Human-readable logs with operation context:
 
 ```
-[INFO][provider] Starting CreateResource operation on table 'users'
-[INFO][connection] Successfully connected to postgres://user:***@localhost:5432/db
-[INFO][handler] Completed CreateResource operation on table 'users' in 245ms
-[WARN][validation] Schema validation warnings for table: 2 warnings
-[ERROR][handler] Failed CreateResource operation on table 'users': connection failed
+[KOLUMN-INFO] PROVIDER          │ Starting CreateResource operation on table 'users'
+[KOLUMN-INFO] CONNECTION        │ Successfully connected to postgres://user:***@localhost:5432/db
+[KOLUMN-INFO] HANDLER           │ Completed CreateResource operation on table 'users' in 245ms
+[KOLUMN-WARNING] VALIDATION       │ Schema validation warnings for table: 2 warnings
+[KOLUMN-ERROR] HANDLER           │ Failed CreateResource operation on table 'users': connection failed
 ```
 
 ### Debug Mode (DEBUG=1)
 Includes detailed JSON data and debug information:
 
 ```
-[INFO][provider] Starting CreateResource operation on table 'users'
-[DEBUG][handler] CreateResource request: {name: "users", schema: "public", columns: [...]}
-[DEBUG][validation] Schema validation passed for table
-[INFO][handler] Completed CreateResource operation on table 'users' in 245ms
+[KOLUMN-INFO] PROVIDER          │ Starting CreateResource operation on table 'users'
+[KOLUMN-DEBUG] HANDLER           │ CreateResource request: {name: "users", schema: "public", columns: [...]}
+[KOLUMN-DEBUG] VALIDATION        │ Schema validation passed for table
+[KOLUMN-INFO] HANDLER           │ Completed CreateResource operation on table 'users' in 245ms
 ```
 
 ## Configuration
@@ -313,29 +313,29 @@ func TestProviderLogging(t *testing.T) {
 
 ### Production Mode
 ```
-[INFO][provider] PostgreSQL provider v1.2.3 initializing
-[INFO][config] Loading configuration from environment
-[INFO][connection] Successfully connected to postgres://user:***@db.example.com:5432/production
-[INFO][registry] Registered 5 resource handlers: table, view, function, index, trigger
-[INFO][handler] Starting CreateResource operation on table 'users'
-[INFO][validation] Schema validation passed for table
-[INFO][handler] Completed CreateResource operation on table 'users' in 245ms
+[KOLUMN-INFO] PROVIDER          │ PostgreSQL provider v1.2.3 initializing
+[KOLUMN-INFO] CONFIG            │ Loading configuration from environment
+[KOLUMN-INFO] CONNECTION        │ Successfully connected to postgres://user:***@db.example.com:5432/production
+[KOLUMN-INFO] REGISTRY          │ Registered 5 resource handlers: table, view, function, index, trigger
+[KOLUMN-INFO] HANDLER           │ Starting CreateResource operation on table 'users'
+[KOLUMN-INFO] VALIDATION        │ Schema validation passed for table
+[KOLUMN-INFO] HANDLER           │ Completed CreateResource operation on table 'users' in 245ms
 ```
 
 ### Debug Mode (DEBUG=1)
 ```
-[INFO][provider] PostgreSQL provider v1.2.3 initializing
-[DEBUG][config] Configuration details: {host: "db.example.com", port: 5432, database: "production", username: "user", password: "<redacted>"}
-[INFO][connection] Successfully connected to postgres://user:***@db.example.com:5432/production
-[DEBUG][connection] Connection pool initialized: max_connections=20 idle_timeout=5m
-[INFO][registry] Registered 5 resource handlers: table, view, function, index, trigger
-[INFO][handler] Starting CreateResource operation on table 'users'
-[DEBUG][handler] CreateResource request: {name: "users", schema: "public", columns: [{name: "id", type: "bigserial", primary_key: true}, {name: "email", type: "varchar(255)", unique: true}]}
-[DEBUG][validation] Validating table schema: name=users columns=2 constraints=2
-[INFO][validation] Schema validation passed for table
-[DEBUG][handler] Executing SQL: CREATE TABLE public.users (id BIGSERIAL PRIMARY KEY, email VARCHAR(255) UNIQUE NOT NULL)
-[DEBUG][handler] CreateResource response: {success: true, id: "table_users_123", metadata: {...}}
-[INFO][handler] Completed CreateResource operation on table 'users' in 245ms
+[KOLUMN-INFO] PROVIDER          │ PostgreSQL provider v1.2.3 initializing
+[KOLUMN-DEBUG] CONFIG            │ Configuration details: {host: "db.example.com", port: 5432, database: "production", username: "user", password: "<redacted>"}
+[KOLUMN-INFO] CONNECTION        │ Successfully connected to postgres://user:***@db.example.com:5432/production
+[KOLUMN-DEBUG] CONNECTION        │ Connection pool initialized: max_connections=20 idle_timeout=5m
+[KOLUMN-INFO] REGISTRY          │ Registered 5 resource handlers: table, view, function, index, trigger
+[KOLUMN-INFO] HANDLER           │ Starting CreateResource operation on table 'users'
+[KOLUMN-DEBUG] HANDLER           │ CreateResource request: {name: "users", schema: "public", columns: [{name: "id", type: "bigserial", primary_key: true}, {name: "email", type: "varchar(255)", unique: true}]}
+[KOLUMN-DEBUG] VALIDATION        │ Validating table schema: name=users columns=2 constraints=2
+[KOLUMN-INFO] VALIDATION        │ Schema validation passed for table
+[KOLUMN-DEBUG] HANDLER           │ Executing SQL: CREATE TABLE public.users (id BIGSERIAL PRIMARY KEY, email VARCHAR(255) UNIQUE NOT NULL)
+[KOLUMN-DEBUG] HANDLER           │ CreateResource response: {success: true, id: "table_users_123", metadata: {...}}
+[KOLUMN-INFO] HANDLER           │ Completed CreateResource operation on table 'users' in 245ms
 ```
 
 ## Performance Considerations

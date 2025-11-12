@@ -209,7 +209,7 @@ func TestLogInjectionPrevention(t *testing.T) {
 
 // TestLargeLogPrevention tests that extremely large logs don't cause issues
 func TestLargeLogPrevention(t *testing.T) {
-	logger, capture := NewTestLogger(t, "large", false)
+	logger, capture := NewTestLogger(t, "large", true)
 
 	// Test very large message
 	largeMessage := strings.Repeat("A", 1000000) // 1MB message

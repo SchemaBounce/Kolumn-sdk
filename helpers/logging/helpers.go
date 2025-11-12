@@ -3,7 +3,9 @@ package logging
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 )
@@ -73,7 +75,14 @@ func mapToHuman(data map[string]interface{}, context string) string {
 	var parts []string
 	sensitiveFields := []string{"password", "secret", "token", "key", "credential", "auth"}
 
-	for key, value := range data {
+	keys := make([]string, 0, len(data))
+	for key := range data {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		value := data[key]
 		// Check if this is a sensitive field
 		isSensitive := false
 		for _, sensitive := range sensitiveFields {
@@ -368,6 +377,51 @@ func LogConnectionAttempt(logger *Logger, endpoint string, err error) {
 
 // SanitizeEndpoint removes sensitive information from connection strings
 func SanitizeEndpoint(endpoint string) string {
+	if endpoint == "" {
+		return endpoint
+	}
+
+	if strings.Contains(endpoint, "://") {
+		if parsed, err := url.Parse(endpoint); err == nil {
+			var builder strings.Builder
+			builder.WriteString(parsed.Scheme)
+			builder.WriteString("://")
+
+			if parsed.User != nil {
+				username := parsed.User.Username()
+				wroteUserInfo := false
+				if username != "" {
+					builder.WriteString(username)
+					wroteUserInfo = true
+				}
+				if _, hasPassword := parsed.User.Password(); hasPassword {
+					if !wroteUserInfo {
+						builder.WriteString(username)
+					}
+					builder.WriteString(":***")
+					wroteUserInfo = true
+				}
+				if wroteUserInfo {
+					builder.WriteString("@")
+				}
+			}
+
+			builder.WriteString(parsed.Host)
+			if parsed.Path != "" {
+				builder.WriteString(parsed.EscapedPath())
+			}
+			if parsed.RawQuery != "" {
+				builder.WriteString("?")
+				builder.WriteString(parsed.RawQuery)
+			}
+			if parsed.Fragment != "" {
+				builder.WriteString("#")
+				builder.WriteString(parsed.EscapedFragment())
+			}
+			return builder.String()
+		}
+	}
+
 	// Remove passwords from connection strings
 	parts := strings.Split(endpoint, "@")
 	if len(parts) > 1 {

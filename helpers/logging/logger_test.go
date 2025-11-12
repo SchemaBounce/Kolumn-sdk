@@ -2,23 +2,16 @@ package logging
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"testing"
 )
 
-// resetGlobalConfig resets global config to default state for testing
-func resetGlobalConfig() {
-	Configure(&Configuration{
-		DefaultLevel:    LevelInfo,
-		ComponentLevels: make(map[string]Level),
-		EnableDebug:     false,
-	})
-}
-
 func TestLoggerCreation(t *testing.T) {
-	resetGlobalConfig()
+	withCleanConfig(t)
+	configMu.Lock()
+	globalConfig.ComponentLevels = make(map[string]Level)
+	configMu.Unlock()
 	logger := NewLogger("test")
 
 	if logger.GetComponent() != "test" {
@@ -31,7 +24,7 @@ func TestLoggerCreation(t *testing.T) {
 }
 
 func TestLogLevels(t *testing.T) {
-	resetGlobalConfig()
+	withCleanConfig(t)
 	logger, capture := NewTestLogger(t, "test", false)
 
 	// Test info level (should always show)
@@ -56,23 +49,27 @@ func TestLogLevels(t *testing.T) {
 }
 
 func TestDebugMode(t *testing.T) {
-	resetGlobalConfig()
+	withCleanConfig(t)
 	// Test with debug enabled
-	logger, capture := NewTestLogger(t, "test", true)
+	testLogger, capture := NewTestLogger(t, "test_debug_enabled", true)
+	logger := testLogger.Logger
 
 	logger.Debug("debug message")
 	capture.AssertContains(t, "debug message")
 	capture.AssertLevel(t, LevelDebug, "test")
 
 	// Test debug disabled
+	testLogger.Restore()
 	DisableDebug()
-	capture.Clear()
-	logger.Debug("debug message 2")
-	capture.AssertNotContains(t, "debug message 2")
+
+	loggerNoDebug, captureNoDebug := NewTestLogger(t, "test_debug_disabled", false)
+	captureNoDebug.Clear()
+	loggerNoDebug.Logger.Debug("debug message 2")
+	captureNoDebug.AssertNotContains(t, "debug message 2")
 }
 
 func TestStructuredLogging(t *testing.T) {
-	resetGlobalConfig()
+	withCleanConfig(t)
 	logger, capture := NewTestLogger(t, "test", false)
 
 	logger.InfoWithFields("test message", "key1", "value1", "key2", "value2")
@@ -90,7 +87,7 @@ func TestStructuredLogging(t *testing.T) {
 }
 
 func TestJSONDebugLogging(t *testing.T) {
-	logger, capture := NewTestLogger(t, "test", true)
+	logger, capture := NewTestLogger(t, "test_json", true)
 
 	testData := map[string]interface{}{
 		"name":  "test",
@@ -111,39 +108,28 @@ func TestJSONDebugLogging(t *testing.T) {
 	}
 
 	// Test that JSON debug is suppressed when debug is disabled
+	logger.Restore()
 	DisableDebug()
-	capture.Clear()
-	logger.JSONDebug("suppressed context", testData)
-	capture.AssertEmpty(t)
+	loggerNoDebug, captureNoDebug := NewTestLogger(t, "test_json_disabled", false)
+	loggerNoDebug.Logger.JSONDebug("suppressed context", testData)
+	captureNoDebug.AssertEmpty(t)
 }
 
 func TestEnvironmentConfiguration(t *testing.T) {
-	// Save original env
-	originalDebug := os.Getenv("DEBUG")
-	originalComponents := os.Getenv("DEBUG_COMPONENTS")
-
-	// Clean up
-	defer func() {
-		os.Setenv("DEBUG", originalDebug)
-		os.Setenv("DEBUG_COMPONENTS", originalComponents)
-		loadEnvironmentConfig() // Reload original config
-	}()
-
-	// Test DEBUG=1
-	os.Setenv("DEBUG", "1")
-	os.Setenv("DEBUG_COMPONENTS", "")
+	withCleanConfig(t)
+	t.Setenv("DEBUG", "1")
+	t.Setenv("DEBUG_COMPONENTS", "")
 	loadEnvironmentConfig()
 
 	if !GetGlobalDebugStatus() {
 		t.Error("Expected global debug to be enabled with DEBUG=1")
 	}
 
-	// Test DEBUG_COMPONENTS
-	os.Setenv("DEBUG", "")
-	os.Setenv("DEBUG_COMPONENTS", "test,provider")
+	withCleanConfig(t)
+	t.Setenv("DEBUG", "")
+	t.Setenv("DEBUG_COMPONENTS", "test,provider")
 	loadEnvironmentConfig()
 
-	// Create logger and test if debug is enabled for specific component
 	logger := NewLogger("test")
 	if !logger.IsDebugEnabled() {
 		t.Error("Expected debug to be enabled for 'test' component")
@@ -156,7 +142,7 @@ func TestEnvironmentConfiguration(t *testing.T) {
 }
 
 func TestComponentSpecificConfiguration(t *testing.T) {
-	resetGlobalConfig()
+	withCleanConfig(t)
 	cleanup := SetupTestLogging(t, false)
 	defer cleanup()
 
@@ -260,31 +246,33 @@ func TestConcurrentLogging(t *testing.T) {
 }
 
 func TestConfigurationUpdates(t *testing.T) {
-	resetGlobalConfig()
+	withCleanConfig(t)
 	cleanup := SetupTestLogging(t, false)
 	defer cleanup()
 
-	logger := NewLogger("dynamic")
-
 	// Initially debug should be disabled
+	logger := NewLogger("dynamic")
 	if logger.IsDebugEnabled() {
 		t.Error("Expected debug to be initially disabled")
 	}
 
-	// Enable debug and verify it takes effect
+	// Enable debug and verify by creating a new logger
 	EnableDebug()
+	logger = NewLogger("dynamic")
 	if !logger.IsDebugEnabled() {
 		t.Error("Expected debug to be enabled after EnableDebug()")
 	}
 
-	// Disable debug and verify it takes effect
+	// Disable debug and verify with a fresh logger
 	DisableDebug()
+	logger = NewLogger("dynamic")
 	if logger.IsDebugEnabled() {
 		t.Error("Expected debug to be disabled after DisableDebug()")
 	}
 
-	// Enable component-specific debug
+	// Enable component-specific debug and verify
 	EnableComponentDebug("dynamic")
+	logger = NewLogger("dynamic")
 	if !logger.IsDebugEnabled() {
 		t.Error("Expected debug to be enabled for component after EnableComponentDebug()")
 	}
@@ -340,9 +328,8 @@ func TestLogFormatConsistency(t *testing.T) {
 
 	line := lines[0]
 
-	// Check format: [LEVEL][COMPONENT] message
-	if !strings.Contains(line, "[INFO][format] test message") {
-		t.Errorf("Log format incorrect. Expected '[INFO][format] test message', got: %s", line)
+	if !strings.Contains(line, "[KOLUMN-INFO]") || !strings.Contains(line, "FORMAT") || !strings.Contains(line, "test message") {
+		t.Errorf("Log format incorrect. Expected Kolumn-styled line with component and message, got: %s", line)
 	}
 }
 
@@ -375,7 +362,7 @@ func TestMemoryUsageWithLargeLogs(t *testing.T) {
 }
 
 func TestEdgeCases(t *testing.T) {
-	resetGlobalConfig()
+	withCleanConfig(t)
 	logger, capture := NewTestLogger(t, "edge", true)
 
 	// Test nil values
