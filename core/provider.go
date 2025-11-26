@@ -961,13 +961,6 @@ type ObjectDocumentation struct {
 	Links         []DocumentationLink `json:"links,omitempty"`
 }
 
-// DocumentationLink represents a documentation link
-type DocumentationLink struct {
-	Title string `json:"title"`
-	URL   string `json:"url"`
-	Type  string `json:"type,omitempty"` // "official", "tutorial", "example"
-}
-
 // =============================================================================
 // HEALTH CHECK AND METRICS TYPES
 // =============================================================================

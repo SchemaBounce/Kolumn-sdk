@@ -89,6 +89,30 @@ func (p *MyProvider) CallFunction(ctx context.Context, function string, input []
 
 See `examples/simple/provider.go` for a complete working example showing all patterns.
 
+### 2.5 Canonical Documentation Links
+
+Every provider and resource is published under predictable documentation URLs so that
+CLI errors and registry metadata can deep-link into the hosted docs. The SDK exposes
+helpers in `core` to build these links automatically:
+
+```go
+import "github.com/schemabounce/kolumn/sdk/core"
+
+func addDocs(resource string) core.DocumentationLink {
+    return core.DocumentationLink{
+        Title: "Canonical docs",
+        URL:   core.CanonicalResourceDocsURL("schemabounce", "postgres", "1.0.0", resource),
+        Type:  "official",
+    }
+}
+```
+
+The pattern resolves to URLs like
+`https://schemabounce.com/docs/providers/<namespace>/<provider>/<version>/<resource>`
+and matching API paths under `/api/v1/providers/documentation/provider/...`. When building
+your own documentation payloads, always include these links so that downstream users can
+follow the same canonical structure.
+
 ## Architecture
 
 ### Core Interface - The 4-Method RPC Pattern
