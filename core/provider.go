@@ -43,7 +43,8 @@ type Provider interface {
 	Schema() (*Schema, error)
 
 	// CallFunction executes a provider function with unified dispatch
-	// Supports function names: CreateResource, ReadResource, UpdateResource, DeleteResource, etc.
+	// Supports function names: CreateResource, ReadResource, UpdateResource, DeleteResource,
+	// DiscoverResources, DiscoverDatabase, Ping
 	CallFunction(ctx context.Context, function string, input []byte) ([]byte, error)
 
 	// Close cleans up provider resources
@@ -281,6 +282,7 @@ func (d *UnifiedDispatcher) Dispatch(ctx context.Context, function string, input
 		"UpdateResource":    true,
 		"DeleteResource":    true,
 		"DiscoverResources": true,
+		"DiscoverDatabase":  true,
 		"Ping":              true,
 	}
 
@@ -304,6 +306,8 @@ func (d *UnifiedDispatcher) Dispatch(ctx context.Context, function string, input
 		return d.handleDeleteResource(ctx, input)
 	case "DiscoverResources":
 		return d.handleDiscoverResources(ctx, input)
+	case "DiscoverDatabase":
+		return d.handleDiscoverDatabase(ctx, input)
 	case "Ping":
 		return d.handlePing(ctx, input)
 	default:
@@ -664,6 +668,82 @@ func (d *UnifiedDispatcher) handlePing(ctx context.Context, input []byte) ([]byt
 	return json.Marshal(response)
 }
 
+func (d *UnifiedDispatcher) handleDiscoverDatabase(ctx context.Context, input []byte) ([]byte, error) {
+	// SECURITY: Use safe unmarshaling with size and depth limits
+	var discoveryReq DiscoveryRequest
+	if err := security.SafeUnmarshal(input, &discoveryReq); err != nil {
+		return nil, security.NewSecureError(
+			"invalid request format",
+			fmt.Sprintf("discovery request unmarshal failed: %v", err),
+			"INVALID_REQUEST",
+		)
+	}
+
+	// SECURITY: Validate request parameters
+	if discoveryReq.MaxObjects < 0 {
+		return nil, security.NewSecureError(
+			"invalid request parameters",
+			"max_objects cannot be negative",
+			"INVALID_PARAMETERS",
+		)
+	}
+
+	// SECURITY: Limit max objects to prevent resource exhaustion
+	const maxAllowedObjects = 10000
+	if discoveryReq.MaxObjects > maxAllowedObjects {
+		return nil, security.NewSecureError(
+			"request exceeds limits",
+			fmt.Sprintf("max_objects cannot exceed %d", maxAllowedObjects),
+			"REQUEST_TOO_LARGE",
+		)
+	}
+
+	// SECURITY: Validate schema names
+	for _, schema := range discoveryReq.Schemas {
+		if schema == "" {
+			return nil, security.NewSecureError(
+				"invalid schema name",
+				"schema name cannot be empty",
+				"INVALID_SCHEMA_NAME",
+			)
+		}
+		if len(schema) > 100 {
+			return nil, security.NewSecureError(
+				"invalid schema name",
+				"schema name too long (max 100 characters)",
+				"INVALID_SCHEMA_NAME",
+			)
+		}
+	}
+
+	// SECURITY: Validate object types
+	for _, objType := range discoveryReq.ObjectTypes {
+		if err := security.ValidateObjectType(objType); err != nil {
+			return nil, security.NewSecureError(
+				"invalid object type",
+				fmt.Sprintf("object type validation failed: %v", err),
+				"INVALID_OBJECT_TYPE",
+			)
+		}
+	}
+
+	// NOTE: The actual discovery implementation should be delegated to provider-specific
+	// discovery handlers. This is a placeholder that returns an error indicating the
+	// provider needs to implement the discovery logic.
+	//
+	// Providers should:
+	// 1. Connect to their database
+	// 2. Query system catalogs/information_schema
+	// 3. Build DiscoveredObject instances
+	// 4. Return DiscoveryResult with statistics
+
+	return nil, security.NewSecureError(
+		"not implemented",
+		"DiscoverDatabase must be implemented by the provider",
+		"NOT_IMPLEMENTED",
+	)
+}
+
 // BuildCompatibleSchema builds a core-compatible schema from registries
 func (d *UnifiedDispatcher) BuildCompatibleSchema(name, version, providerType, description string) *Schema {
 	schema := &Schema{
@@ -681,7 +761,7 @@ func (d *UnifiedDispatcher) BuildCompatibleSchema(name, version, providerType, d
 
 	// Add core functions
 	supportedFunctions = append(supportedFunctions,
-		"CreateResource", "ReadResource", "UpdateResource", "DeleteResource", "Ping")
+		"CreateResource", "ReadResource", "UpdateResource", "DeleteResource", "DiscoverDatabase", "Ping")
 
 	// Build resource types from registries
 	if d.createRegistry != nil {

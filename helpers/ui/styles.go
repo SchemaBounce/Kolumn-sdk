@@ -423,6 +423,8 @@ func GetOperationType(operation string) string {
 		return OpValidate
 	case "init", "initializing":
 		return OpInit
+	case "noop", "none", "in_sync", "in-sync", "unchanged", "":
+		return OpSuccess
 	case "success":
 		return OpSuccess
 	case "error":
