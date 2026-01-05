@@ -12,18 +12,19 @@
 2. [Provider Interface (Core 4-Method Contract)](#2-provider-interface-core-4-method-contract)
 3. [Tiered Function Requirements](#3-tiered-function-requirements)
 4. [Streaming Functions](#4-streaming-functions)
-5. [Request/Response Type Definitions](#5-requestresponse-type-definitions)
-6. [Resource Handler Registration](#6-resource-handler-registration)
-7. [Schema Definition Requirements](#7-schema-definition-requirements)
-8. [State Management](#8-state-management)
-9. [Error Handling Standards](#9-error-handling-standards)
-10. [Security Requirements](#10-security-requirements)
-11. [Configuration Standards](#11-configuration-standards)
-12. [Logging Standards](#12-logging-standards)
-13. [Testing Requirements](#13-testing-requirements)
-14. [Provider Categories and Specifics](#14-provider-categories-and-specifics)
-15. [Compliance Checklist](#15-compliance-checklist)
-16. [Version History and Migration Guide](#16-version-history-and-migration-guide)
+5. [Data Resource Types](#5-data-resource-types)
+6. [Request/Response Type Definitions](#6-requestresponse-type-definitions)
+7. [Resource Handler Registration](#7-resource-handler-registration)
+8. [Schema Definition Requirements](#8-schema-definition-requirements)
+9. [State Management](#9-state-management)
+10. [Error Handling Standards](#10-error-handling-standards)
+11. [Security Requirements](#11-security-requirements)
+12. [Configuration Standards](#12-configuration-standards)
+13. [Logging Standards](#13-logging-standards)
+14. [Testing Requirements](#14-testing-requirements)
+15. [Provider Categories and Specifics](#15-provider-categories-and-specifics)
+16. [Compliance Checklist](#16-compliance-checklist)
+17. [Version History and Migration Guide](#17-version-history-and-migration-guide)
 
 ---
 
@@ -546,9 +547,263 @@ func (p *Provider) handleOutboxHealthMetrics(ctx context.Context, input []byte) 
 
 ---
 
-## 5. Request/Response Type Definitions
+## 5. Data Resource Types
 
-### 5.1 Core Types
+### 5.1 Overview
+
+Kolumn providers support **data resource types** for seeding, inserting, and managing data within database objects. These resources enable declarative data management alongside schema management, with automatic dependency detection ensuring data operations execute after their target resources are created.
+
+### 5.2 Resource Type Naming Convention
+
+Data resources follow a consistent naming pattern:
+
+| Pattern | Description | Examples |
+|---------|-------------|----------|
+| `{provider}_data` | Declarative data seeding with upsert | `postgres_data`, `mysql_data` |
+| `{provider}_insert` | Insert-only data operations | `postgres_insert`, `mongodb_insert` |
+
+### 5.3 Supported Data Resource Types by Provider
+
+#### SQL Providers
+
+| Provider | Resource Types | Target Attribute | Target Resource |
+|----------|---------------|------------------|-----------------|
+| PostgreSQL | `postgres_data`, `postgres_insert` | `table` | `postgres_table` |
+| MySQL | `mysql_data`, `mysql_insert` | `table` | `mysql_table` |
+| SQLite | `sqlite_data`, `sqlite_insert` | `table` | `sqlite_table` |
+| MSSQL | `mssql_data`, `mssql_insert` | `table` | `mssql_table` |
+| CockroachDB | `cockroachdb_data`, `cockroachdb_insert` | `table` | `cockroachdb_table` |
+
+#### Analytical Warehouses
+
+| Provider | Resource Types | Target Attribute | Target Resource |
+|----------|---------------|------------------|-----------------|
+| Snowflake | `snowflake_data`, `snowflake_insert` | `table` | `snowflake_table` |
+| BigQuery | `bigquery_data`, `bigquery_insert` | `table` | `bigquery_table` |
+| Redshift | `redshift_data`, `redshift_insert` | `table` | `redshift_table` |
+| Databricks | `databricks_data`, `databricks_insert` | `table` | `databricks_table` |
+| DuckDB | `duckdb_data`, `duckdb_insert` | `table` | `duckdb_table` |
+
+#### NoSQL Providers
+
+| Provider | Resource Types | Target Attribute | Target Resource |
+|----------|---------------|------------------|-----------------|
+| MongoDB | `mongodb_data`, `mongodb_insert` | `collection` | `mongodb_collection` |
+| DynamoDB | `dynamodb_data`, `dynamodb_insert` | `table` | `dynamodb_table` |
+
+#### Time-Series Providers
+
+| Provider | Resource Types | Target Attribute | Target Resource |
+|----------|---------------|------------------|-----------------|
+| InfluxDB | `influxdb_data`, `influxdb_insert` | `bucket` | `influxdb_bucket` |
+
+### 5.4 Automatic Dependency Detection
+
+**CRITICAL**: The Kolumn CLI automatically detects dependencies between data resources and their target resources. This ensures proper execution ordering without requiring explicit `depends_on` declarations.
+
+#### How It Works
+
+1. **Configuration Parsing**: When a data resource is parsed, the CLI extracts the target attribute (`table`, `collection`, or `bucket`)
+2. **Target Resolution**: The CLI searches for a matching target resource in the same schema/namespace
+3. **Dependency Injection**: An implicit dependency is added to the resource execution context
+4. **Phase Ordering**: Resources are organized into execution phases based on dependencies
+
+#### Example
+
+```hcl
+# Phase 1: Table created first (automatically detected as dependency)
+create "postgres_table" "users" {
+  schema = "public"
+  name   = "users"
+
+  id    = { type = "INTEGER", primary_key = true }
+  name  = { type = "VARCHAR(100)", not_null = true }
+  email = { type = "VARCHAR(255)" }
+}
+
+# Phase 2: Data seeded after table exists (dependency auto-detected)
+create "postgres_data" "user_seeds" {
+  schema = "public"
+  table  = "users"  # ← Automatic dependency on postgres_table.users
+
+  conflict_keys = ["id"]
+
+  rows = [
+    { id = 1, name = "Alice", email = "alice@example.com" },
+    { id = 2, name = "Bob", email = "bob@example.com" },
+  ]
+}
+```
+
+**Execution Output**:
+```
+Execution order preview (2 phases, 2 resources):
+  Phase 1 – 1 resource(s)
+    - postgres_table.users (provider: postgres.main)
+  Phase 2 – 1 resource(s)
+    - postgres_data.user_seeds (provider: postgres.main)
+```
+
+### 5.5 Data Resource Configuration Schema
+
+#### Common Attributes (All Providers)
+
+| Attribute | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `schema` / `database` | string | Varies* | Schema or database namespace |
+| `table` / `collection` / `bucket` | string | Yes | Target resource name |
+| `rows` | list | Yes | Array of row objects to insert |
+| `conflict_keys` | list | No | Columns for upsert conflict detection |
+
+*Schema requirement varies by provider (e.g., SQLite doesn't require schema)
+
+#### SQL Provider Example
+
+```hcl
+create "postgres_data" "products" {
+  schema = "public"
+  table  = "products"
+
+  conflict_keys = ["product_id"]
+
+  rows = [
+    { product_id = "SKU001", name = "Widget", price = 9.99 },
+    { product_id = "SKU002", name = "Gadget", price = 19.99 },
+  ]
+}
+```
+
+#### NoSQL Provider Examples
+
+**MongoDB**:
+```hcl
+create "mongodb_insert" "users" {
+  database   = "myapp"
+  collection = "users"  # ← Target: mongodb_collection.users
+
+  rows = [
+    { _id = "user1", name = "Alice", roles = ["admin"] },
+    { _id = "user2", name = "Bob", roles = ["user"] },
+  ]
+}
+```
+
+**DynamoDB**:
+```hcl
+create "dynamodb_insert" "orders" {
+  table = "orders"  # ← Target: dynamodb_table.orders
+
+  rows = [
+    { pk = "ORDER#001", sk = "META", status = "pending" },
+    { pk = "ORDER#001", sk = "ITEM#1", product = "Widget" },
+  ]
+}
+```
+
+**InfluxDB**:
+```hcl
+create "influxdb_insert" "metrics" {
+  org    = "myorg"
+  bucket = "telemetry"  # ← Target: influxdb_bucket.telemetry
+
+  rows = [
+    { measurement = "cpu", tags = { host = "server1" }, fields = { usage = 45.2 } },
+    { measurement = "cpu", tags = { host = "server2" }, fields = { usage = 62.8 } },
+  ]
+}
+```
+
+### 5.6 Handler Implementation Requirements
+
+#### Required Methods
+
+Data handlers MUST implement the standard `CreateHandler` interface:
+
+```go
+type DataHandler interface {
+    Create(ctx context.Context, config map[string]interface{}) (*CreateResult, error)
+    Update(ctx context.Context, config map[string]interface{}, priorState map[string]interface{}) (*UpdateResult, error)
+    Delete(ctx context.Context, state map[string]interface{}) (*DeleteResult, error)
+    Schema() *ObjectType
+}
+```
+
+#### Upsert Behavior
+
+For `*_data` resources with `conflict_keys`:
+- MUST implement upsert semantics (INSERT ... ON CONFLICT DO UPDATE or equivalent)
+- MUST handle missing conflict keys gracefully
+- MUST validate conflict keys exist in the target table
+
+#### Handler Registration
+
+```go
+func (p *Provider) registerDataHandlers() {
+    dataHandler := NewDataHandler(p.db, p.logger)
+    insertHandler := NewInsertHandler(p.db, p.logger)
+
+    // Register both data and insert handlers
+    p.createRegistry.Register("data", dataHandler)
+    p.createRegistry.Register("insert", insertHandler)
+
+    p.discoverRegistry.Register("data", dataHandler)
+    p.discoverRegistry.Register("insert", insertHandler)
+}
+```
+
+### 5.7 Provider-Specific Target Mapping
+
+The Kolumn CLI uses a mapping system to resolve dependencies between data resources and their targets:
+
+```go
+// dataTargetMapping defines how data/insert resources map to their target resources
+type dataTargetMapping struct {
+    configAttr     string // Attribute in data resource config (e.g., "table", "collection")
+    targetSuffix   string // Suffix of target resource type (e.g., "_table", "_collection")
+    schemaAttr     string // Schema/namespace attribute (e.g., "schema", "database")
+    targetNameAttr string // Name attribute in target resource (usually "name")
+}
+
+// Mapping by provider type
+var providerMappings = map[string]*dataTargetMapping{
+    // NoSQL with different patterns
+    "mongodb": {
+        configAttr:     "collection",
+        targetSuffix:   "_collection",
+        schemaAttr:     "database",
+        targetNameAttr: "name",
+    },
+    "influxdb": {
+        configAttr:     "bucket",
+        targetSuffix:   "_bucket",
+        schemaAttr:     "org",
+        targetNameAttr: "name",
+    },
+    // Default for SQL providers (postgres, mysql, sqlite, mssql, etc.)
+    "default": {
+        configAttr:     "table",
+        targetSuffix:   "_table",
+        schemaAttr:     "schema",
+        targetNameAttr: "name",
+    },
+}
+```
+
+### 5.8 Compliance Checklist for Data Resources
+
+- [ ] `*_data` handler registered with upsert support
+- [ ] `*_insert` handler registered for insert-only operations
+- [ ] Handlers implement full `CreateHandler` interface
+- [ ] Schema() returns correct attribute definitions
+- [ ] Discover handler can introspect seeded data
+- [ ] Conflict keys validation implemented (for upsert)
+- [ ] Target resource dependency correctly resolved by CLI
+
+---
+
+## 6. Request/Response Type Definitions
+
+### 6.1 Core Types
 
 ```go
 // CreateResourceRequest represents a request to create a resource
@@ -632,7 +887,7 @@ type DiscoveredResource struct {
 }
 ```
 
-### 5.2 Plan/Apply Types
+### 6.2 Plan/Apply Types
 
 ```go
 // PlanRequest represents a request to plan resource operations
@@ -694,7 +949,7 @@ type ApplySummary struct {
 }
 ```
 
-### 5.3 State Types
+### 6.3 State Types
 
 ```go
 // StateRequest represents a request for state information
@@ -743,7 +998,7 @@ type ResourceInstance struct {
 }
 ```
 
-### 5.4 Migration Types
+### 6.4 Migration Types
 
 ```go
 // MigrationRequest represents a migration operation request
@@ -802,7 +1057,7 @@ type MigrationRollbackResponse struct {
 }
 ```
 
-### 5.5 Utility Types
+### 6.5 Utility Types
 
 ```go
 // PingRequest represents a health check request
@@ -835,9 +1090,9 @@ type VersionResponse struct {
 
 ---
 
-## 6. Resource Handler Registration
+## 7. Resource Handler Registration
 
-### 6.1 Registry Architecture
+### 7.1 Registry Architecture
 
 Providers use a dual-registry system for resource handlers:
 
@@ -849,7 +1104,7 @@ type UnifiedDispatcher struct {
 }
 ```
 
-### 6.2 Registry Parity Rule
+### 7.2 Registry Parity Rule
 
 **CRITICAL**: Every resource type registered in `createRegistry` MUST have a corresponding handler in `discoverRegistry`.
 
@@ -866,7 +1121,7 @@ createRegistry.Register("function", &FunctionCreateHandler{})
 // Missing: discoverRegistry.Register("function", ...)
 ```
 
-### 6.3 Handler Interface
+### 7.3 Handler Interface
 
 ```go
 // CreateHandler interface for resource creation
@@ -884,7 +1139,7 @@ type DiscoverHandler interface {
 }
 ```
 
-### 6.4 Registration Example
+### 7.4 Registration Example
 
 ```go
 func (p *Provider) initializeHandlers() {
@@ -919,9 +1174,9 @@ func (p *Provider) initializeHandlers() {
 
 ---
 
-## 7. Schema Definition Requirements
+## 8. Schema Definition Requirements
 
-### 7.1 ProviderSchema Structure
+### 8.1 ProviderSchema Structure
 
 ```go
 type ProviderSchema struct {
@@ -933,7 +1188,7 @@ type ProviderSchema struct {
 }
 ```
 
-### 7.2 ResourceTypeDefinition
+### 8.2 ResourceTypeDefinition
 
 ```go
 type ResourceTypeDefinition struct {
@@ -944,7 +1199,7 @@ type ResourceTypeDefinition struct {
 }
 ```
 
-### 7.3 ObjectType (Schema Definition)
+### 8.3 ObjectType (Schema Definition)
 
 ```go
 type ObjectType struct {
@@ -968,7 +1223,7 @@ type ValidatorSpec struct {
 }
 ```
 
-### 7.4 Schema Example
+### 8.4 Schema Example
 
 ```go
 func (h *TableHandler) Schema() *ObjectType {
@@ -1016,9 +1271,9 @@ func (h *TableHandler) Schema() *ObjectType {
 
 ---
 
-## 8. State Management
+## 9. State Management
 
-### 8.1 State File Format
+### 9.1 State File Format
 
 ```json
 {
@@ -1056,7 +1311,7 @@ func (h *TableHandler) Schema() *ObjectType {
 }
 ```
 
-### 8.2 State Operations
+### 9.2 State Operations
 
 #### GetState
 ```go
@@ -1094,7 +1349,7 @@ func (p *Provider) handleSetState(ctx context.Context, input []byte) ([]byte, er
 }
 ```
 
-### 8.3 Resource Status Transitions
+### 9.3 Resource Status Transitions
 
 ```
                     ┌─────────────────┐
@@ -1115,9 +1370,9 @@ func (p *Provider) handleSetState(ctx context.Context, input []byte) ([]byte, er
 
 ---
 
-## 9. Error Handling Standards
+## 10. Error Handling Standards
 
-### 9.1 SecureError
+### 10.1 SecureError
 
 All provider errors MUST use the `SecureError` type to prevent sensitive data leakage:
 
@@ -1153,7 +1408,7 @@ func sanitize(v interface{}) interface{} {
 }
 ```
 
-### 9.2 Error Categories
+### 10.2 Error Categories
 
 | Category | Description | Example |
 |----------|-------------|---------|
@@ -1163,7 +1418,7 @@ func sanitize(v interface{}) interface{} {
 | StateError | State management issues | "state version conflict" |
 | PermissionError | Authorization failures | "permission denied" |
 
-### 9.3 Error Response Format
+### 10.3 Error Response Format
 
 ```go
 type ErrorResponse struct {
@@ -1174,7 +1429,7 @@ type ErrorResponse struct {
 }
 ```
 
-### 9.4 Error Handling Example
+### 10.4 Error Handling Example
 
 ```go
 func (h *TableHandler) Create(ctx context.Context, config map[string]interface{}) (*CreateResult, error) {
@@ -1211,9 +1466,9 @@ func (h *TableHandler) Create(ctx context.Context, config map[string]interface{}
 
 ---
 
-## 10. Security Requirements
+## 11. Security Requirements
 
-### 10.1 Credential Handling
+### 11.1 Credential Handling
 
 **MANDATORY**: All providers MUST use `SecureString` for sensitive data:
 
@@ -1241,7 +1496,7 @@ func (s *SecureString) Clear() {
 }
 ```
 
-### 10.2 Memory Zeroization
+### 11.2 Memory Zeroization
 
 ```go
 func (p *Provider) Close() error {
@@ -1264,7 +1519,7 @@ func (p *Provider) Close() error {
 }
 ```
 
-### 10.3 SQL Injection Prevention
+### 11.3 SQL Injection Prevention
 
 **MANDATORY**: All SQL queries MUST use parameterized statements:
 
@@ -1283,7 +1538,7 @@ func (h *TableHandler) selectByID(ctx context.Context, id string) (*Table, error
 }
 ```
 
-### 10.4 Logging Restrictions
+### 11.4 Logging Restrictions
 
 **MANDATORY**: Sensitive data MUST NEVER appear in logs:
 
@@ -1306,7 +1561,7 @@ func (p *Provider) Configure(ctx context.Context, config map[string]interface{})
 }
 ```
 
-### 10.5 Zero Simulation Code Policy
+### 11.5 Zero Simulation Code Policy
 
 **ABSOLUTE PROHIBITION**: No simulation, mock, stub, or fake code in production paths.
 
@@ -1318,9 +1573,9 @@ Prohibited patterns:
 
 ---
 
-## 11. Configuration Standards
+## 12. Configuration Standards
 
-### 11.1 Standard Configuration Fields
+### 12.1 Standard Configuration Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -1336,7 +1591,7 @@ Prohibited patterns:
 
 *Required fields may vary by provider (e.g., SQLite only requires `database`)
 
-### 11.2 Environment Variable Support
+### 12.2 Environment Variable Support
 
 Providers SHOULD support environment variable substitution:
 
@@ -1357,7 +1612,7 @@ func (p *Provider) resolveConfigValue(value interface{}) interface{} {
 }
 ```
 
-### 11.3 Connection Pool Configuration
+### 12.3 Connection Pool Configuration
 
 ```go
 func (p *Provider) configurePool(db *sql.DB, config *ProviderConfiguration) {
@@ -1376,9 +1631,9 @@ func (p *Provider) configurePool(db *sql.DB, config *ProviderConfiguration) {
 
 ---
 
-## 12. Logging Standards
+## 13. Logging Standards
 
-### 12.1 Logger Types
+### 13.1 Logger Types
 
 | Logger | Purpose | Example Usage |
 |--------|---------|---------------|
@@ -1389,7 +1644,7 @@ func (p *Provider) configurePool(db *sql.DB, config *ProviderConfiguration) {
 | `DispatchLogger` | Request routing | "Routing to CreateResource", "Dispatch completed" |
 | `StateLogger` | State management | "Loading state", "Saving state" |
 
-### 12.2 Structured Logging Format
+### 13.2 Structured Logging Format
 
 ```go
 // CORRECT: Structured logging with key-value pairs
@@ -1403,7 +1658,7 @@ logging.HandlerLogger.Info("Creating table",
 logging.HandlerLogger.Info(fmt.Sprintf("Creating table %s in schema %s", tableName, schemaName))
 ```
 
-### 12.3 Log Levels
+### 13.3 Log Levels
 
 | Level | Usage |
 |-------|-------|
@@ -1412,7 +1667,7 @@ logging.HandlerLogger.Info(fmt.Sprintf("Creating table %s in schema %s", tableNa
 | Warn | Warning conditions |
 | Error | Error conditions |
 
-### 12.4 Logging Example
+### 13.4 Logging Example
 
 ```go
 func (h *TableHandler) Create(ctx context.Context, config map[string]interface{}) (*CreateResult, error) {
@@ -1447,9 +1702,9 @@ func (h *TableHandler) Create(ctx context.Context, config map[string]interface{}
 
 ---
 
-## 13. Testing Requirements
+## 14. Testing Requirements
 
-### 13.1 Coverage Requirements
+### 14.1 Coverage Requirements
 
 | Test Type | Minimum Coverage | Description |
 |-----------|------------------|-------------|
@@ -1457,7 +1712,7 @@ func (h *TableHandler) Create(ctx context.Context, config map[string]interface{}
 | Integration Tests | Required | Database interaction testing |
 | E2E Tests | Required | Full provider lifecycle testing |
 
-### 13.2 Test Organization
+### 14.2 Test Organization
 
 ```
 providers/{name}/
@@ -1474,7 +1729,7 @@ providers/{name}/
 │       └── streaming_test.go
 ```
 
-### 13.3 Required Test Scenarios
+### 14.3 Required Test Scenarios
 
 #### Unit Tests
 - Configuration parsing and validation
@@ -1494,7 +1749,7 @@ providers/{name}/
 - Streaming handler operations
 - Migration operations
 
-### 13.4 Zero Simulation Code
+### 14.4 Zero Simulation Code
 
 **MANDATORY**: All tests MUST use real database connections:
 
@@ -1530,7 +1785,7 @@ func TestTableCreate(t *testing.T) {
 }
 ```
 
-### 13.5 Test Utilities
+### 14.5 Test Utilities
 
 ```go
 // setupTestDatabase creates a real test database
@@ -1553,9 +1808,9 @@ func setupTestDatabase(t *testing.T) (*sql.DB, func()) {
 
 ---
 
-## 14. Provider Categories and Specifics
+## 15. Provider Categories and Specifics
 
-### 14.1 SQL Relational Databases
+### 15.1 SQL Relational Databases
 
 **Providers**: PostgreSQL, MySQL, MSSQL, SQLite, CockroachDB
 
@@ -1568,10 +1823,11 @@ func setupTestDatabase(t *testing.T) (*sql.DB, func()) {
 
 **Resource Types** (minimum):
 - `schema`, `table`, `view`, `index`, `function`, `trigger`, `sequence`
+- `data`, `insert` (data seeding with upsert and insert-only)
 - `user`, `role`, `grant` (if supported)
 - `stream_sink`, `stream_route`, `stream_outbox`
 
-### 14.2 Analytical Warehouses
+### 15.2 Analytical Warehouses
 
 **Providers**: Snowflake, BigQuery, Redshift, Databricks, DuckDB
 
@@ -1584,6 +1840,7 @@ func setupTestDatabase(t *testing.T) (*sql.DB, func()) {
 
 **Resource Types** (minimum):
 - `schema`, `table`, `view`, `function` (if supported)
+- `data`, `insert` (data seeding with upsert and insert-only)
 - `warehouse`, `stage` (provider-specific)
 - `stream_sink`, `stream_route`, `stream_outbox`
 
@@ -1591,7 +1848,7 @@ func setupTestDatabase(t *testing.T) (*sql.DB, func()) {
 - Transaction support varies (check provider documentation)
 - Migration operations may have limitations due to data volumes
 
-### 14.3 NoSQL Document Databases
+### 15.3 NoSQL Document Databases
 
 **Providers**: MongoDB, DynamoDB
 
@@ -1605,15 +1862,17 @@ func setupTestDatabase(t *testing.T) (*sql.DB, func()) {
 
 **MongoDB**:
 - `database`, `collection`, `index`, `validation`
+- `data`, `insert` (document seeding with upsert and insert-only)
 - `replica_set`, `shard` (if applicable)
 - `stream_sink`, `stream_route`, `stream_outbox`
 
 **DynamoDB**:
 - `table`, `global_secondary_index`, `local_secondary_index`
+- `data`, `insert` (item seeding with upsert and insert-only)
 - `stream`, `backup`, `global_table`
 - `stream_sink`, `stream_route`, `stream_outbox`
 
-### 14.4 Time-Series Databases
+### 15.4 Time-Series Databases
 
 **Providers**: InfluxDB
 
@@ -1625,12 +1884,13 @@ func setupTestDatabase(t *testing.T) (*sql.DB, func()) {
 
 **Resource Types**:
 - `bucket`, `measurement`, `retention_policy`
+- `data`, `insert` (point seeding with upsert and insert-only)
 - `task`, `check`, `notification_endpoint`
 - `stream_sink`, `stream_route`, `stream_outbox`
 
 ---
 
-## 15. Compliance Checklist
+## 16. Compliance Checklist
 
 Use this checklist to verify provider compliance with the specification:
 
@@ -1679,6 +1939,13 @@ Use this checklist to verify provider compliance with the specification:
 - [ ] `OutboxHealthMetrics` implemented
 - [ ] `OutboxCleanupRetention` implemented
 
+### Data Resources (ALL Required)
+- [ ] `*_data` handler registered with upsert support
+- [ ] `*_insert` handler registered for insert-only operations
+- [ ] Data handlers implement full `CreateHandler` interface
+- [ ] Conflict key validation implemented for upsert operations
+- [ ] Target resource dependency auto-detected by CLI
+
 ### Registry Parity
 - [ ] All create handlers have matching discover handlers
 - [ ] Schema() reflects all registered handlers
@@ -1703,22 +1970,22 @@ Use this checklist to verify provider compliance with the specification:
 
 ---
 
-## 16. Version History and Migration Guide
+## 17. Version History and Migration Guide
 
-### 16.1 Version History
+### 17.1 Version History
 
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | December 2025 | Initial specification release |
 
-### 16.2 Future Considerations
+### 17.2 Future Considerations
 
 - Additional streaming patterns
 - Enhanced migration capabilities
 - Cross-provider reference resolution
 - Advanced caching strategies
 
-### 16.3 Migration Guide
+### 17.3 Migration Guide
 
 When updating providers to comply with this specification:
 
