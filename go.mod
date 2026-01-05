@@ -4,7 +4,10 @@ go 1.22.0
 
 // SDK has minimal dependencies - only standard library
 
-require github.com/stretchr/testify v1.11.1
+require (
+	github.com/flosch/pongo2/v6 v6.0.0
+	github.com/stretchr/testify v1.11.1
+)
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
