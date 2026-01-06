@@ -345,6 +345,214 @@ func TestProviderLogging(t *testing.T) {
 - **JSON handling**: Large JSON objects are only marshaled in debug mode
 - **Sanitization**: Credential sanitization is cached for repeated connection strings
 
+## Plan Resource Evaluation Patterns
+
+When implementing the `Plan` function in providers, follow these patterns to ensure high-quality, actionable CLI output. The goal is **brief, actionable logs**: one line per unchanged item and SQL-focused output for changes.
+
+### Required Functions
+
+Every provider should implement these helper functions for plan evaluation:
+
+#### 1. `stripTemplateContext` - Remove Template Pollution
+
+The `_template_context` field often pollutes config snapshots. Strip it before processing:
+
+```go
+// stripTemplateContext removes the _template_context field from config maps
+// to prevent template metadata from polluting config snapshots and logs.
+func stripTemplateContext(config map[string]interface{}) map[string]interface{} {
+    result := make(map[string]interface{}, len(config))
+    for k, v := range config {
+        if k == "_template_context" {
+            continue
+        }
+        result[k] = v
+    }
+    return result
+}
+```
+
+#### 2. `checkInsertRowExists` - NOOP Detection for Inserts
+
+For SQL databases, check if insert data already exists to avoid false CREATE reports:
+
+```go
+// checkInsertRowExists checks if a row already exists in the database
+// based on unique key columns to enable accurate NOOP detection.
+func (p *Provider) checkInsertRowExists(ctx context.Context, tableName string, values map[string]interface{}, uniqueKeys []string) (bool, error) {
+    if len(uniqueKeys) == 0 {
+        return false, nil
+    }
+
+    // Build WHERE clause from unique keys
+    var conditions []string
+    var args []interface{}
+    for i, key := range uniqueKeys {
+        if val, ok := values[key]; ok {
+            conditions = append(conditions, fmt.Sprintf("%s = $%d", key, i+1))
+            args = append(args, val)
+        }
+    }
+
+    if len(conditions) == 0 {
+        return false, nil
+    }
+
+    query := fmt.Sprintf("SELECT 1 FROM %s WHERE %s LIMIT 1",
+        tableName, strings.Join(conditions, " AND "))
+
+    var exists int
+    err := p.db.QueryRowContext(ctx, query, args...).Scan(&exists)
+    if err == sql.ErrNoRows {
+        return false, nil
+    }
+    if err != nil {
+        return false, err
+    }
+    return true, nil
+}
+```
+
+**NoSQL Variants:**
+
+- **MongoDB**: `checkInsertDocumentExists` - Uses `_id` or all fields for matching
+- **DynamoDB**: `checkInsertItemExists` - Uses partition/sort key for GetItem
+- **InfluxDB**: Skip existence check (append-only time-series)
+
+#### 3. `evaluate[Provider]ResourceForPlan` - Resource Summary Generation
+
+Generate concise resource summaries for CLI logging:
+
+```go
+// evaluatePostgresResourceForPlan evaluates a resource and returns a summary
+// with NOOP detection for existing data.
+func (p *Provider) evaluatePostgresResourceForPlan(ctx context.Context, resource rpc.PlanResource) map[string]interface{} {
+    summary := map[string]interface{}{
+        "resource_type": resource.ResourceType,
+        "name":          resource.Name,
+        "action":        resource.Action,
+    }
+
+    // Strip template context from config
+    cleanConfig := stripTemplateContext(resource.Config)
+    summary["config_snapshot"] = cleanConfig
+
+    // NOOP detection for insert resources
+    if strings.HasSuffix(resource.ResourceType, "_insert") && resource.Action == "create" {
+        tableName, _ := cleanConfig["table"].(string)
+        values, _ := cleanConfig["values"].(map[string]interface{})
+        uniqueKeys, _ := cleanConfig["unique_keys"].([]string)
+
+        if tableName != "" && len(values) > 0 {
+            exists, err := p.checkInsertRowExists(ctx, tableName, values, uniqueKeys)
+            if err == nil && exists {
+                summary["action"] = "noop"
+                summary["reason"] = "row already exists"
+            }
+        }
+    }
+
+    return summary
+}
+```
+
+### handlePlan Implementation
+
+The `handlePlan` function should build resource summaries for CLI logging:
+
+```go
+func (p *Provider) handlePlan(ctx context.Context, input json.RawMessage) (json.RawMessage, error) {
+    var req struct {
+        Resources []struct {
+            ResourceType string                 `json:"resource_type"`
+            Name         string                 `json:"name"`
+            Config       map[string]interface{} `json:"config"`
+            Action       string                 `json:"action"`
+        } `json:"resources"`
+    }
+
+    if err := json.Unmarshal(input, &req); err != nil {
+        return nil, fmt.Errorf("failed to parse plan request: %w", err)
+    }
+
+    // Build resource summaries for CLI logging
+    resourceSummaries := make([]map[string]interface{}, 0, len(req.Resources))
+    for _, resource := range req.Resources {
+        planResource := rpc.PlanResource{
+            ResourceType: resource.ResourceType,
+            Name:         resource.Name,
+            Config:       resource.Config,
+            Action:       resource.Action,
+        }
+        summary := p.evaluatePostgresResourceForPlan(ctx, planResource)
+        resourceSummaries = append(resourceSummaries, summary)
+    }
+
+    response := map[string]interface{}{
+        "success":            true,
+        "resource_count":     len(req.Resources),
+        "resource_summaries": resourceSummaries,
+    }
+
+    return json.Marshal(response)
+}
+```
+
+### Expected CLI Output
+
+With these patterns, CLI output transforms from verbose JSON to concise, actionable logs:
+
+**Before (verbose):**
+```
+Planning postgres_insert.seed_roles...
+  Action: CREATE
+  Config: {"table":"roles","values":{"id":"admin","name":"Administrator","permissions":["read","write","delete"],"created_at":"2024-01-01T00:00:00Z","_template_context":{"source":"seeds/roles.csv","line":1}}}
+Planning postgres_insert.seed_users...
+  Action: CREATE
+  Config: {"table":"users","values":{"id":1,"email":"admin@example.com","role_id":"admin","_template_context":{"source":"seeds/users.csv","line":1}}}
+```
+
+**After (actionable):**
+```
+  postgres_insert.seed_roles: NOOP (row already exists)
+  postgres_insert.seed_users: NOOP (row already exists)
+  postgres_table.audit_log: CREATE
+    + CREATE TABLE audit_log (id BIGSERIAL PRIMARY KEY, ...)
+```
+
+### Provider-Specific Considerations
+
+| Provider | Existence Check | Unique Key Source |
+|----------|-----------------|-------------------|
+| PostgreSQL | `SELECT 1 ... LIMIT 1` | `unique_keys` config or primary key |
+| MySQL | `SELECT 1 ... LIMIT 1` | `unique_keys` config or primary key |
+| SQLite | `SELECT 1 ... LIMIT 1` | `unique_keys` config or primary key |
+| MSSQL | `SELECT TOP 1 1 ...` | `unique_keys` config or primary key |
+| Snowflake | `SELECT 1 ... LIMIT 1` | `unique_keys` config or primary key |
+| Redshift | `SELECT 1 ... LIMIT 1` | `unique_keys` config or primary key |
+| BigQuery | `SELECT 1 ... LIMIT 1` | `unique_keys` config or primary key |
+| MongoDB | `FindOne` with `_id` or doc match | `_id` field or full document |
+| DynamoDB | `GetItem` with key | Partition key + sort key |
+| InfluxDB | N/A (append-only) | Time-series, no existence check |
+| DuckDB | `SELECT 1 ... LIMIT 1` | `unique_keys` config or primary key |
+| Databricks | `SELECT 1 ... LIMIT 1` | `unique_keys` config or primary key |
+
+### Integration with CallFunction
+
+Add the `Plan` case to your provider's `CallFunction` dispatch:
+
+```go
+func (p *Provider) CallFunction(ctx context.Context, function string, input json.RawMessage) (json.RawMessage, error) {
+    switch function {
+    case "Plan":
+        return p.handlePlan(ctx, input)
+    case "CreateResource":
+        return p.handleCreateResource(ctx, input)
+    // ... other cases
+    }
+}
+```
+
 ## Integration with Core Kolumn
 
 This SDK logging package is designed to be compatible with core Kolumn's logging system:

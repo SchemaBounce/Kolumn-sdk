@@ -423,6 +423,8 @@ func GetOperationType(operation string) string {
 		return OpValidate
 	case "init", "initializing":
 		return OpInit
+	case "noop", "none", "in_sync", "in-sync", "unchanged", "":
+		return OpSuccess
 	case "success":
 		return OpSuccess
 	case "error":
@@ -550,4 +552,438 @@ func FormatLogLine(severity string, component string, message string, options St
 		message = componentTag + " " + message
 	}
 	return FormatMessageWithStyle(message, style, options)
+}
+
+// =============================================================================
+// Word Wrapping and Text Formatting
+// =============================================================================
+
+const (
+	// DefaultTerminalWidth is the default terminal width for formatting
+	DefaultTerminalWidth = 80
+	// DefaultWrapWidth is the default text wrap width (leaving margin)
+	DefaultWrapWidth = 78
+	// MinWrapWidth is the minimum width before wrapping is disabled
+	MinWrapWidth = 40
+)
+
+// GetTerminalWidth returns the terminal width from environment or default
+func GetTerminalWidth() int {
+	if cols := os.Getenv("COLUMNS"); cols != "" {
+		if width := parseIntOrDefault(cols, DefaultTerminalWidth); width > 0 {
+			return width
+		}
+	}
+	return DefaultTerminalWidth
+}
+
+// parseIntOrDefault parses a string to int, returning default on failure
+func parseIntOrDefault(s string, defaultVal int) int {
+	var result int
+	_, err := fmt.Sscanf(s, "%d", &result)
+	if err != nil {
+		return defaultVal
+	}
+	return result
+}
+
+// WrapText wraps text to the specified width, breaking at word boundaries.
+// It preserves existing line breaks and handles long words gracefully.
+func WrapText(text string, width int) string {
+	if width < MinWrapWidth {
+		width = MinWrapWidth
+	}
+
+	var result strings.Builder
+	paragraphs := strings.Split(text, "\n")
+
+	for i, paragraph := range paragraphs {
+		if i > 0 {
+			result.WriteString("\n")
+		}
+
+		// Preserve empty lines
+		if strings.TrimSpace(paragraph) == "" {
+			continue
+		}
+
+		wrapped := wrapParagraph(paragraph, width)
+		result.WriteString(wrapped)
+	}
+
+	return result.String()
+}
+
+// wrapParagraph wraps a single paragraph (no embedded newlines)
+func wrapParagraph(text string, width int) string {
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return ""
+	}
+
+	var lines []string
+	var currentLine strings.Builder
+	currentLen := 0
+
+	for _, word := range words {
+		wordLen := len(word)
+
+		// If word alone is longer than width, break it
+		if wordLen > width {
+			if currentLen > 0 {
+				lines = append(lines, currentLine.String())
+				currentLine.Reset()
+				currentLen = 0
+			}
+			// Break long word across lines
+			for len(word) > width {
+				lines = append(lines, word[:width-1]+"-")
+				word = word[width-1:]
+			}
+			if len(word) > 0 {
+				currentLine.WriteString(word)
+				currentLen = len(word)
+			}
+			continue
+		}
+
+		// Check if word fits on current line
+		if currentLen == 0 {
+			currentLine.WriteString(word)
+			currentLen = wordLen
+		} else if currentLen+1+wordLen <= width {
+			currentLine.WriteString(" ")
+			currentLine.WriteString(word)
+			currentLen += 1 + wordLen
+		} else {
+			// Start new line
+			lines = append(lines, currentLine.String())
+			currentLine.Reset()
+			currentLine.WriteString(word)
+			currentLen = wordLen
+		}
+	}
+
+	// Don't forget the last line
+	if currentLen > 0 {
+		lines = append(lines, currentLine.String())
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// WrapTextWithIndent wraps text with a consistent indent for continuation lines.
+// The first line starts at column 0, subsequent lines are indented.
+func WrapTextWithIndent(text string, width int, indent string) string {
+	if width < MinWrapWidth {
+		width = MinWrapWidth
+	}
+
+	indentLen := len(indent)
+	firstLineWidth := width
+	continuationWidth := width - indentLen
+
+	if continuationWidth < MinWrapWidth/2 {
+		continuationWidth = MinWrapWidth / 2
+	}
+
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return ""
+	}
+
+	var lines []string
+	var currentLine strings.Builder
+	currentLen := 0
+	isFirstLine := true
+	maxWidth := firstLineWidth
+
+	for _, word := range words {
+		wordLen := len(word)
+
+		if currentLen == 0 {
+			currentLine.WriteString(word)
+			currentLen = wordLen
+		} else if currentLen+1+wordLen <= maxWidth {
+			currentLine.WriteString(" ")
+			currentLine.WriteString(word)
+			currentLen += 1 + wordLen
+		} else {
+			lines = append(lines, currentLine.String())
+			currentLine.Reset()
+			if isFirstLine {
+				isFirstLine = false
+				maxWidth = continuationWidth
+			}
+			currentLine.WriteString(word)
+			currentLen = wordLen
+		}
+	}
+
+	if currentLen > 0 {
+		lines = append(lines, currentLine.String())
+	}
+
+	// Add indent to continuation lines
+	for i := 1; i < len(lines); i++ {
+		lines[i] = indent + lines[i]
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// WrapTextWithPrefix wraps text, keeping a prefix on every line.
+// Useful for multi-line log messages with consistent prefixes.
+func WrapTextWithPrefix(text string, prefix string, width int) string {
+	prefixLen := visibleLength(prefix)
+	contentWidth := width - prefixLen - 1 // -1 for space after prefix
+
+	if contentWidth < MinWrapWidth/2 {
+		contentWidth = MinWrapWidth / 2
+	}
+
+	wrapped := WrapText(text, contentWidth)
+	lines := strings.Split(wrapped, "\n")
+
+	var result strings.Builder
+	for i, line := range lines {
+		if i > 0 {
+			result.WriteString("\n")
+		}
+		result.WriteString(prefix)
+		result.WriteString(" ")
+		result.WriteString(line)
+	}
+
+	return result.String()
+}
+
+// visibleLength returns the visible length of a string, excluding ANSI codes
+func visibleLength(s string) int {
+	// Remove ANSI escape sequences
+	inEscape := false
+	visible := 0
+	for _, r := range s {
+		if r == '\033' {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			if r == 'm' {
+				inEscape = false
+			}
+			continue
+		}
+		visible++
+	}
+	return visible
+}
+
+// FormatWrappedBlock formats a block of text with a decorative border.
+// Example output:
+// ╷
+// │ Error: Something went wrong
+// │
+// │ This is a longer explanation that will be wrapped
+// │ to fit within the terminal width nicely.
+// ╵
+func FormatWrappedBlock(title, body string, blockType string, options StyleOptions) string {
+	width := GetTerminalWidth() - 4 // Account for "│ " prefix and margin
+
+	var titleColor, borderColor string
+	switch strings.ToLower(blockType) {
+	case "error":
+		titleColor = Red
+		borderColor = Red
+	case "warning":
+		titleColor = Yellow
+		borderColor = Yellow
+	case "success":
+		titleColor = Green
+		borderColor = Green
+	default:
+		titleColor = Blue
+		borderColor = Gray
+	}
+
+	var result strings.Builder
+
+	// Top border
+	if options.UseColors {
+		result.WriteString(borderColor)
+	}
+	result.WriteString("╷\n")
+
+	// Title line
+	result.WriteString("│ ")
+	if options.UseColors {
+		result.WriteString(Reset)
+		result.WriteString(Bold)
+		result.WriteString(titleColor)
+	}
+	result.WriteString(title)
+	if options.UseColors {
+		result.WriteString(Reset)
+	}
+	result.WriteString("\n")
+
+	// Empty line after title if there's a body
+	if body != "" {
+		if options.UseColors {
+			result.WriteString(borderColor)
+		}
+		result.WriteString("│\n")
+
+		// Body lines (wrapped)
+		wrappedBody := WrapText(body, width)
+		bodyLines := strings.Split(wrappedBody, "\n")
+		for _, line := range bodyLines {
+			if options.UseColors {
+				result.WriteString(borderColor)
+			}
+			result.WriteString("│ ")
+			if options.UseColors {
+				result.WriteString(Reset)
+			}
+			result.WriteString(line)
+			result.WriteString("\n")
+		}
+	}
+
+	// Bottom border
+	if options.UseColors {
+		result.WriteString(borderColor)
+	}
+	result.WriteString("╵")
+	if options.UseColors {
+		result.WriteString(Reset)
+	}
+
+	return result.String()
+}
+
+// FormatWrappedMessage formats a message with word wrapping and optional prefix.
+// This is for single-line style messages that may need to wrap.
+func FormatWrappedMessage(message string, style MessageStyle, options StyleOptions) string {
+	width := GetTerminalWidth()
+
+	// Build the prefix
+	var prefix string
+	if options.UsePrefixes && style.SchemaPrefix != "" {
+		prefix = "[" + style.SchemaPrefix + "]"
+		if options.UseColors && style.Color != "" {
+			prefix = style.Color + prefix + Reset
+		}
+		if options.UseBold && style.Bold {
+			prefix = Bold + prefix + Reset
+		}
+	}
+
+	prefixLen := 0
+	if prefix != "" {
+		prefixLen = visibleLength(prefix) + 1 // +1 for space
+	}
+
+	// Calculate available width for message
+	contentWidth := width - prefixLen
+	if contentWidth < MinWrapWidth {
+		contentWidth = MinWrapWidth
+	}
+
+	// Wrap the message
+	wrapped := WrapText(message, contentWidth)
+	lines := strings.Split(wrapped, "\n")
+
+	var result strings.Builder
+	for i, line := range lines {
+		if i > 0 {
+			result.WriteString("\n")
+		}
+		if i == 0 && prefix != "" {
+			result.WriteString(prefix)
+			result.WriteString(" ")
+		} else if prefix != "" {
+			// Indent continuation lines to align with first line
+			result.WriteString(strings.Repeat(" ", prefixLen))
+		}
+		result.WriteString(line)
+	}
+
+	return result.String()
+}
+
+// FormatKeyValue formats a key-value pair with proper alignment and wrapping.
+// Used for displaying configuration or state information.
+func FormatKeyValue(key, value string, keyWidth int, options StyleOptions) string {
+	width := GetTerminalWidth()
+
+	// Format key with padding
+	keyFormatted := fmt.Sprintf("%-*s", keyWidth, key+":")
+	if options.UseColors {
+		keyFormatted = Cyan + keyFormatted + Reset
+	}
+
+	// Calculate value width
+	valueWidth := width - keyWidth - 3 // -3 for ": " and margin
+	if valueWidth < MinWrapWidth/2 {
+		valueWidth = MinWrapWidth / 2
+	}
+
+	// Wrap value
+	wrappedValue := WrapText(value, valueWidth)
+	valueLines := strings.Split(wrappedValue, "\n")
+
+	var result strings.Builder
+	for i, line := range valueLines {
+		if i > 0 {
+			result.WriteString("\n")
+			result.WriteString(strings.Repeat(" ", keyWidth+2)) // Align with value start
+		} else {
+			result.WriteString(keyFormatted)
+			result.WriteString(" ")
+		}
+		result.WriteString(line)
+	}
+
+	return result.String()
+}
+
+// FormatList formats a list with bullets and proper wrapping.
+func FormatList(items []string, bullet string, options StyleOptions) string {
+	if bullet == "" {
+		bullet = "•"
+	}
+
+	width := GetTerminalWidth()
+	bulletLen := len(bullet) + 1       // +1 for space
+	itemWidth := width - bulletLen - 2 // -2 for indentation
+
+	var result strings.Builder
+	for i, item := range items {
+		if i > 0 {
+			result.WriteString("\n")
+		}
+
+		wrapped := WrapTextWithIndent(item, itemWidth, strings.Repeat(" ", bulletLen))
+		lines := strings.Split(wrapped, "\n")
+
+		for j, line := range lines {
+			if j == 0 {
+				if options.UseColors {
+					result.WriteString(Cyan)
+				}
+				result.WriteString(bullet)
+				if options.UseColors {
+					result.WriteString(Reset)
+				}
+				result.WriteString(" ")
+			}
+			result.WriteString(line)
+			if j < len(lines)-1 {
+				result.WriteString("\n")
+			}
+		}
+	}
+
+	return result.String()
 }

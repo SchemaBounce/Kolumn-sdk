@@ -94,6 +94,7 @@ type ResourceDoc struct {
 	Documentation *ResourceDocumentation  `json:"documentation,omitempty"`
 	Examples      []*ResourceExample      `json:"examples,omitempty"`
 	Relationships []*ResourceRelationship `json:"relationships,omitempty"`
+	Links         []DocumentationLink     `json:"links,omitempty"`
 }
 
 // ResourceDocumentation contains resource-specific documentation

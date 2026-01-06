@@ -38,8 +38,9 @@ type Config struct {
 
 // DocumentationExtractor handles extraction of documentation from providers
 type DocumentationExtractor struct {
-	config  *Config
-	builder *core.DocumentationBuilder
+	config       *Config
+	builder      *core.DocumentationBuilder
+	providerMeta core.ProviderMetadata
 }
 
 func main() {
@@ -186,6 +187,7 @@ func (e *DocumentationExtractor) extractFromProvider() error {
 
 	// Extract provider metadata from schema
 	providerMeta := e.extractProviderMetadata(schema)
+	e.providerMeta = providerMeta
 	e.builder.SetProvider(providerMeta)
 
 	// Extract configuration documentation
@@ -433,6 +435,10 @@ func (e *DocumentationExtractor) extractResourceDocs(schema *core.Schema, docs *
 			},
 		}
 
+		if link := e.canonicalResourceLink(resourceType.Name); link != nil {
+			resourceDoc.Links = append(resourceDoc.Links, *link)
+		}
+
 		e.builder.AddResource(resourceType.Name, resourceDoc)
 	}
 
@@ -448,6 +454,10 @@ func (e *DocumentationExtractor) extractResourceDocs(schema *core.Schema, docs *
 				Documentation: &core.ResourceDocumentation{
 					Overview: fmt.Sprintf("Manages %s resources", name),
 				},
+			}
+
+			if link := e.canonicalResourceLink(name); link != nil {
+				resourceDoc.Links = append(resourceDoc.Links, *link)
 			}
 
 			e.builder.AddResource(name, resourceDoc)
@@ -468,8 +478,23 @@ func (e *DocumentationExtractor) extractResourceDocs(schema *core.Schema, docs *
 				},
 			}
 
+			if link := e.canonicalResourceLink(name); link != nil {
+				resourceDoc.Links = append(resourceDoc.Links, *link)
+			}
+
 			e.builder.AddResource(name, resourceDoc)
 		}
+	}
+}
+
+func (e *DocumentationExtractor) canonicalResourceLink(resourceName string) *core.DocumentationLink {
+	if e.providerMeta.Namespace == "" || e.providerMeta.Name == "" || e.providerMeta.Version == "" {
+		return nil
+	}
+	return &core.DocumentationLink{
+		Title: fmt.Sprintf("Canonical %s docs", resourceName),
+		URL:   core.CanonicalResourceDocsURL(e.providerMeta.Namespace, e.providerMeta.Name, e.providerMeta.Version, resourceName),
+		Type:  "official",
 	}
 }
 

@@ -2,6 +2,38 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🚨 NO ORPHANED WORK - CROSS-PROJECT RULES (ABSOLUTE LAW)
+
+**MANDATORY**: All work must be connected to the ecosystem. Orphaned code is forbidden.
+
+### SDK Documentation Requirements
+When adding or modifying SDK features:
+1. **Update README.md** - Document new interfaces, methods, patterns
+2. **Update Examples** - Add/update `examples/` directory with working code
+3. **Notify Dependent Projects** - SDK changes may require updates in:
+   - `/mnt/c/git/Kolumn/` - Core CLI (uses SDK interfaces)
+   - `/mnt/c/git/Kolumn-providers-database/` - All providers (imports SDK)
+   - `/mnt/c/git/frontend/` - Documentation pages may need updates
+
+### Cross-Project Synchronization
+**SDK Interface Changes → ALL Consumers Must Update**:
+1. **Provider Interface Changes** → Update all 11 database providers
+2. **Type Changes** → Update CLI RPC layer and providers
+3. **New Features** → Update documentation across ecosystem
+
+### Verification Checklist
+Before completing any SDK work:
+- [ ] README.md documents the feature/change
+- [ ] Examples demonstrate usage
+- [ ] CLAUDE.md updated if patterns changed
+- [ ] Considered impact on dependent repositories
+
+### FORBIDDEN Actions
+- ❌ Adding interfaces without documentation
+- ❌ Breaking changes without migration guide
+- ❌ New patterns without examples
+- ❌ Features that require provider changes without coordinating those changes
+
 ## Project Overview
 
 This is the **Kolumn Provider SDK** - a Go SDK library for building external providers that integrate with Kolumn's infrastructure-as-code platform. The SDK follows Go best practices (like AWS SDK and other provider SDKs) as a **library**, not an application framework.
@@ -30,6 +62,32 @@ This is the **Kolumn Provider SDK** - a Go SDK library for building external pro
 - `create/` - CREATE object handler utilities
 - `discover/` - DISCOVER object handler utilities  
 - `examples/` - Usage examples and patterns
+
+## Provider Specification (Authoritative Reference)
+
+**CRITICAL**: The authoritative specification for ALL Kolumn providers is:
+
+📋 **[`docs/PROVIDER_SPECIFICATION.md`](docs/PROVIDER_SPECIFICATION.md)** - Complete provider requirements (16 sections, 89+ functions)
+
+This comprehensive document defines:
+- **Core 4-Method Interface** - Configure, Schema, CallFunction, Close
+- **Tiered Function Requirements** - 22-25 required functions by provider type
+- **Request/Response Types** - Complete type definitions
+- **Security Requirements** - Credential handling, SQL injection prevention
+- **Testing Requirements** - Coverage minimums, real database testing
+- **Compliance Checklist** - Verification steps for spec compliance
+
+### Required Functions by Provider Type
+
+| Provider Type | Universal (Tier 1) | Enterprise (Tier 2) | Migration (Tier 3) | Streaming |
+|---------------|-------------------|---------------------|-------------------|-----------|
+| SQL Databases | 11 functions | +3 (GetAuditLog, DetectDrift, ValidateState) | +3 | +5 |
+| NoSQL Databases | 11 functions | +2 (DetectDrift, ValidateState) | +3 | +5 |
+| Time-Series | 11 functions | +2 | +3 | +5 |
+
+**All provider implementations MUST comply with this specification.**
+
+---
 
 ## Core Interface
 

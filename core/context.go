@@ -451,6 +451,25 @@ type PlanSummary struct {
 	RiskLevel       string         `json:"risk_level"`
 }
 
+// PlanResource represents a resource being evaluated during plan operations.
+// This struct is used by providers to generate resource summaries for CLI logging.
+type PlanResource struct {
+	ResourceType string                 `json:"resource_type"`
+	Name         string                 `json:"name"`
+	Config       map[string]interface{} `json:"config"`
+	Action       string                 `json:"action"`
+}
+
+// PlanResourceSummary represents a summarized resource for CLI logging output.
+// This provides a clean, actionable view of planned changes without verbose JSON.
+type PlanResourceSummary struct {
+	ResourceType   string                 `json:"resource_type"`
+	Name           string                 `json:"name"`
+	Action         string                 `json:"action"`
+	Reason         string                 `json:"reason,omitempty"`
+	ConfigSnapshot map[string]interface{} `json:"config_snapshot,omitempty"`
+}
+
 // ImportRequest represents a request to import existing resources
 type ImportRequest struct {
 	ObjectType string                 `json:"object_type"`
