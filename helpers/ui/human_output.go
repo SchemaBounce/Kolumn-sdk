@@ -100,6 +100,101 @@ func RedCaret(options StyleOptions) string {
 	return "^"
 }
 
+// FormatDriftOperations formats a list of pending operations as a multi-line bulleted list.
+// This improves readability by presenting each operation on its own line with a bullet point.
+func FormatDriftOperations(operations []string) string {
+	if len(operations) == 0 {
+		return ""
+	}
+
+	var formatted strings.Builder
+	for _, op := range operations {
+		formatted.WriteString("\n  • ")
+		formatted.WriteString(op)
+	}
+	return formatted.String()
+}
+
+// ErrorBlock represents a structured error for clear, scannable formatting.
+type ErrorBlock struct {
+	Summary    string            // One-line summary of what failed
+	RootCause  string            // The actual underlying error
+	Context    map[string]string // Key-value context (operation, schema, etc.)
+	Suggestion string            // Optional fix suggestion
+}
+
+// FormatStructuredError formats an error with clear structure for easy scanning.
+// Returns a multi-line formatted block with summary, root cause, context, and suggestions.
+func FormatStructuredError(err ErrorBlock, options StyleOptions) string {
+	var formatted strings.Builder
+
+	// Summary line
+	formatted.WriteString("\n  ")
+	formatted.WriteString(err.Summary)
+	formatted.WriteString("\n")
+
+	// Root cause section
+	if err.RootCause != "" {
+		formatted.WriteString("\n  Root cause: ")
+		formatted.WriteString(err.RootCause)
+		formatted.WriteString("\n")
+	}
+
+	// Context section
+	if len(err.Context) > 0 {
+		formatted.WriteString("\n  Context:\n")
+		for key, value := range err.Context {
+			formatted.WriteString("    • ")
+			formatted.WriteString(key)
+			formatted.WriteString(": ")
+			formatted.WriteString(value)
+			formatted.WriteString("\n")
+		}
+	}
+
+	// Suggestion section
+	if err.Suggestion != "" {
+		formatted.WriteString("\n  Suggestion: ")
+		formatted.WriteString(err.Suggestion)
+		formatted.WriteString("\n")
+	}
+
+	return formatted.String()
+}
+
+// ParsePendingOperation converts a raw operation string to readable SQL-like format.
+// Transforms internal format like "revoke [TEMPORARY TEMP] on map[database:...] from user"
+// into clean format like "REVOKE TEMPORARY on database schemabounce_control FROM user".
+func ParsePendingOperation(raw string) string {
+	if raw == "" {
+		return raw
+	}
+
+	// Simple transformations for common patterns
+	s := raw
+
+	// Remove map[] notation and convert to readable format
+	s = strings.ReplaceAll(s, "map[", "")
+	s = strings.ReplaceAll(s, "]", "")
+
+	// Clean up bracket notation
+	s = strings.ReplaceAll(s, "[", "")
+
+	// Uppercase SQL keywords
+	s = strings.ReplaceAll(s, "revoke", "REVOKE")
+	s = strings.ReplaceAll(s, "grant", "GRANT")
+	s = strings.ReplaceAll(s, "alter", "ALTER")
+	s = strings.ReplaceAll(s, "create", "CREATE")
+	s = strings.ReplaceAll(s, "drop", "DROP")
+
+	// Uppercase SQL prepositions
+	s = strings.ReplaceAll(s, " on ", " ON ")
+	s = strings.ReplaceAll(s, " from ", " FROM ")
+	s = strings.ReplaceAll(s, " to ", " TO ")
+
+	return s
+}
+
 // RenderLineWithCaret inserts a caret at the 1-based column position and appends an optional annotation.
 func RenderLineWithCaret(line string, column int, annotation string, options StyleOptions) string {
 	caret := RedCaret(options)
