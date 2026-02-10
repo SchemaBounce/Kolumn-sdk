@@ -1324,6 +1324,16 @@ func (h *TableHandler) Schema() *ObjectType {
                 Description: "Table indexes",
                 Required:    false,
             },
+            "row_level_security": {
+                Type:        "boolean",
+                Description: "Enable Row Level Security on the table",
+                Required:    false,
+            },
+            "force_row_level_security": {
+                Type:        "boolean",
+                Description: "Force Row Level Security for table owner sessions",
+                Required:    false,
+            },
             "created_at": {
                 Type:        "string",
                 Description: "Creation timestamp",
@@ -1333,6 +1343,8 @@ func (h *TableHandler) Schema() *ObjectType {
     }
 }
 ```
+
+> **Note**: Column items SHOULD also include a `check` property (type: `string`, description: `CHECK constraint expression`) for providers that support CHECK constraints. See the database provider repo's `PROVIDER_SPECIFICATION.md` Appendix G and H for full RLS and CHECK requirements.
 
 ---
 
