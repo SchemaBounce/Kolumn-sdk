@@ -8,7 +8,7 @@ func HumanStatusColor(status string) string {
 	case "IN_SYNC", "APPLY", "APPLIED":
 		return BrightGreen
 	case "DRIFT", "VALIDATION":
-		return BrightYellow
+		return Yellow
 	case "ERROR", "APPLY_FAILED", "FAILED":
 		return BrightRed
 	default:
@@ -21,7 +21,7 @@ func levelColor(level string) string {
 	case "ERROR":
 		return BrightRed
 	case "WARN", "WARNING":
-		return BrightYellow
+		return Yellow
 	case "DEBUG":
 		return Gray
 	default:
@@ -413,7 +413,7 @@ func SimplifyProviderLog(line string, providerType string, options StyleOptions)
 			return BrightRed + providerType + Reset + ": " + message
 		}
 		if options.UseColors && level == "WARN" {
-			return BrightYellow + providerType + Reset + ": " + message
+			return Yellow + providerType + Reset + ": " + message
 		}
 		return providerType + ": " + message
 	}
