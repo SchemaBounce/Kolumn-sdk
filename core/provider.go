@@ -21,9 +21,30 @@ const (
 	// APIVersion represents the API compatibility version
 	APIVersion = "v1"
 
-	// ProtocolVersion represents the RPC protocol version
-	ProtocolVersion = 1
+	// Protocol versioning (semantic versioning)
+	ProtocolVersion           = "1.0.0" // Current protocol version (semantic)
+	ProtocolVersionInt        = 1       // Legacy for go-plugin (maintain for backward compatibility)
+	MinCompatibleProtocol     = "1.0.0" // Minimum protocol version this SDK supports
+	DeprecationWarningVersion = "0.9.0" // Warn if provider uses this or older
 )
+
+// ProtocolVersionInfo provides detailed protocol compatibility information
+type ProtocolVersionInfo struct {
+	Current            string   `json:"current"`                       // "1.0.0"
+	MinimumRequired    string   `json:"minimum_required"`              // "1.0.0"
+	SupportedVersions  []string `json:"supported_versions"`            // ["1.0.0"]
+	DeprecatedVersions []string `json:"deprecated_versions,omitempty"` // []
+	OptionalFeatures   []string `json:"optional_features,omitempty"`   // ["enhanced_state"]
+}
+
+// DeprecationInfo tracks deprecation metadata
+type DeprecationInfo struct {
+	Version         string `json:"version"`          // "0.9.0"
+	DeprecatedSince string `json:"deprecated_since"` // "2024-06-01"
+	RemovalDate     string `json:"removal_date"`     // "2025-06-01"
+	MigrationGuide  string `json:"migration_guide"`  // URL
+	ReplacedBy      string `json:"replaced_by"`      // "1.0.0"
+}
 
 // Provider is the core interface that all Kolumn providers must implement.
 //
@@ -81,10 +102,13 @@ type Schema struct {
 	// Provider metadata
 	Name        string `json:"name"`
 	Version     string `json:"version"`
-	Protocol    string `json:"protocol"`
+	Protocol    string `json:"protocol"` // NOW contains semantic version "1.0.0"
 	Type        string `json:"type"`
 	Description string `json:"description"`
 	DisplayName string `json:"display_name,omitempty"` // Optional display name for UI prefixes (e.g., "POSTGRES", "MYSQL")
+
+	// NEW: Detailed protocol compatibility (Phase 1 - Foundation)
+	ProtocolVersionInfo *ProtocolVersionInfo `json:"protocol_version_info,omitempty"`
 
 	// Core compatibility fields - these match the core ProviderSchema structure
 	SupportedFunctions []string                 `json:"supported_functions"` // Functions this provider implements
