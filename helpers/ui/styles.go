@@ -13,7 +13,7 @@ const (
 
 	Red     = "\033[31m"
 	Green   = "\033[32m"
-	Yellow  = "\033[33m"
+	Yellow  = "\033[38;5;178m" // Darker gold/yellow - readable on light terminals
 	Blue    = "\033[34m"
 	Magenta = "\033[35m"
 	Cyan    = "\033[36m"
@@ -22,7 +22,7 @@ const (
 
 	BrightRed     = "\033[91m"
 	BrightGreen   = "\033[92m"
-	BrightYellow  = "\033[93m"
+	BrightYellow  = "\033[38;5;214m" // Darker bright yellow - readable on light terminals
 	BrightBlue    = "\033[94m"
 	BrightMagenta = "\033[95m"
 	BrightCyan    = "\033[96m"

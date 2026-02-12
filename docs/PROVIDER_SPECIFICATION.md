@@ -349,6 +349,26 @@ Required for: PostgreSQL, MySQL, MSSQL, SQLite, CockroachDB, MongoDB (4.0+), Dyn
 
 **Note**: InfluxDB is exempt from transaction requirements due to time-series nature.
 
+#### 3.3.3 Schema Introspection Functions (Required: SQL Relational + Analytical)
+
+Required for: PostgreSQL, MySQL, MSSQL, SQLite, CockroachDB, Snowflake, BigQuery, Redshift, Databricks, DuckDB
+
+| Function | Description | Request Type | Response Type |
+|----------|-------------|--------------|---------------|
+| `GetTypeConversion` | Assess type conversion risk and generate ALTER SQL | TypeConversionRequest | TypeConversionResponse |
+
+**Purpose**: When Kolumn detects a column type change (via drift detection or plan), it calls the provider to:
+1. Assess the risk level of the conversion (safe/risky/dangerous)
+2. Generate provider-specific ALTER COLUMN syntax
+3. Generate USING clause (if supported, e.g., PostgreSQL)
+4. Recommend migration for dangerous conversions
+
+**Why Provider-Specific**: Each database has different:
+- Type systems and names (VARCHAR vs NVARCHAR vs STRING)
+- ALTER syntax (PostgreSQL: `ALTER COLUMN`, MySQL: `MODIFY COLUMN`)
+- USING clause support (PostgreSQL only)
+- Conversion rules (what's safe in one DB may be risky in another)
+
 ### 3.4 Tier 3 - Migration Functions (Required ALL)
 
 Every provider MUST implement these migration functions:
@@ -1057,7 +1077,52 @@ type MigrationRollbackResponse struct {
 }
 ```
 
-### 6.5 Utility Types
+### 6.5 Type Conversion Types
+
+```go
+// TypeConversionRequest represents a request to assess column type conversion
+type TypeConversionRequest struct {
+    ResourceType string `json:"resource_type"`           // e.g., "postgres_table"
+    TableSchema  string `json:"table_schema,omitempty"`  // e.g., "public"
+    TableName    string `json:"table_name"`              // e.g., "users"
+    ColumnName   string `json:"column_name"`             // e.g., "status"
+    FromType     string `json:"from_type"`               // Current type in database
+    ToType       string `json:"to_type"`                 // Desired type in config
+}
+
+// TypeConversionResponse represents type conversion assessment
+type TypeConversionResponse struct {
+    Success          bool   `json:"success"`
+    Risk             string `json:"risk"`               // "safe", "implicit", "explicit", "risky", "dangerous"
+    RequiresUsing    bool   `json:"requires_using"`     // True if USING clause needed
+    DefaultUsing     string `json:"default_using"`      // Provider-generated USING clause (if supported)
+    SuggestMigration bool   `json:"suggest_migration"`  // True if migration recommended over inline ALTER
+    AlterSQL         string `json:"alter_sql"`          // Provider-specific ALTER COLUMN statement
+    Warning          string `json:"warning,omitempty"`  // User-facing warning message
+    Notes            string `json:"notes,omitempty"`    // Additional context for the conversion
+    Error            string `json:"error,omitempty"`
+}
+
+// Type conversion risk levels (for documentation reference)
+// - "safe": No data loss possible, no USING needed (e.g., INT -> BIGINT)
+// - "implicit": Implicit cast available, USING optional (e.g., UUID -> TEXT)
+// - "explicit": Explicit cast required, USING recommended (e.g., BIGINT -> INT)
+// - "risky": Potential data loss/failure, USING required (e.g., TEXT -> INT)
+// - "dangerous": High risk of data loss, migration recommended (e.g., VARCHAR(200) -> VARCHAR(100))
+```
+
+**Provider-Specific ALTER Syntax Examples:**
+
+| Provider | ALTER Syntax | USING Support |
+|----------|-------------|---------------|
+| PostgreSQL | `ALTER TABLE t ALTER COLUMN c TYPE x USING expr` | ✅ Full |
+| MySQL | `ALTER TABLE t MODIFY COLUMN c x` | ❌ None |
+| MSSQL | `ALTER TABLE t ALTER COLUMN c x` | ❌ None |
+| Snowflake | `ALTER TABLE t ALTER COLUMN c SET DATA TYPE x` | ❌ None |
+| SQLite | N/A - requires table rebuild | ❌ N/A |
+| BigQuery | Limited ALTER support | ❌ None |
+
+### 6.6 Utility Types
 
 ```go
 // PingRequest represents a health check request
@@ -1259,6 +1324,16 @@ func (h *TableHandler) Schema() *ObjectType {
                 Description: "Table indexes",
                 Required:    false,
             },
+            "row_level_security": {
+                Type:        "boolean",
+                Description: "Enable Row Level Security on the table",
+                Required:    false,
+            },
+            "force_row_level_security": {
+                Type:        "boolean",
+                Description: "Force Row Level Security for table owner sessions",
+                Required:    false,
+            },
             "created_at": {
                 Type:        "string",
                 Description: "Creation timestamp",
@@ -1268,6 +1343,8 @@ func (h *TableHandler) Schema() *ObjectType {
     }
 }
 ```
+
+> **Note**: Column items SHOULD also include a `check` property (type: `string`, description: `CHECK constraint expression`) for providers that support CHECK constraints. See the database provider repo's `PROVIDER_SPECIFICATION.md` Appendix G and H for full RLS and CHECK requirements.
 
 ---
 
