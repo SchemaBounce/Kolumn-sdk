@@ -1,0 +1,64 @@
+# CODEOWNERS - Define code ownership for automatic review requests
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# =============================================================================
+# DEFAULT OWNERS
+# =============================================================================
+# These owners will be requested for review on all changes
+*                                   @SchemaBounce/platform-team
+
+# =============================================================================
+# DOCUMENTATION
+# =============================================================================
+*.md                                @SchemaBounce/platform-team
+/docs/                              @SchemaBounce/platform-team
+README.md                           @SchemaBounce/platform-team
+CLAUDE.md                           @SchemaBounce/platform-team
+
+# =============================================================================
+# CI/CD & INFRASTRUCTURE
+# =============================================================================
+.github/                            @SchemaBounce/platform-team
+.gitlab-ci.yml                      @SchemaBounce/platform-team
+Dockerfile                          @SchemaBounce/platform-team
+docker-compose*.yml                 @SchemaBounce/platform-team
+Makefile                            @SchemaBounce/platform-team
+*.tf                                @SchemaBounce/platform-team
+/charts/                            @SchemaBounce/platform-team
+/k8s/                               @SchemaBounce/platform-team
+
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+.golangci.yml                       @SchemaBounce/platform-team
+.pre-commit-config.yaml             @SchemaBounce/platform-team
+go.mod                              @SchemaBounce/platform-team
+go.sum                              @SchemaBounce/platform-team
+package.json                        @SchemaBounce/platform-team
+tsconfig.json                       @SchemaBounce/platform-team
+
+# =============================================================================
+# SECURITY-SENSITIVE
+# =============================================================================
+# These files require security team review
+**/auth/                            @SchemaBounce/platform-team
+**/security/                        @SchemaBounce/platform-team
+**/crypto/                          @SchemaBounce/platform-team
+**/secrets/                         @SchemaBounce/platform-team
+
+# =============================================================================
+# PROJECT-SPECIFIC (Customize per repo)
+# =============================================================================
+
+# Provider code
+# /providers/                        @SchemaBounce/provider-team
+
+# API handlers
+# /internal/handlers/                @SchemaBounce/api-team
+
+# Frontend components
+# /src/components/                   @SchemaBounce/frontend-team
+
+# Database migrations
+# /migrations/                       @SchemaBounce/platform-team
+# /kolumn/                           @SchemaBounce/platform-team

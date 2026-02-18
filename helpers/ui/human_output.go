@@ -245,7 +245,7 @@ func FormatTerraformStyle(resourceType, resourceName, action string, options Sty
 		case strings.Contains(actionLower, "creat"):
 			resource = BrightGreen + resource + Reset
 		case strings.Contains(actionLower, "updat"), strings.Contains(actionLower, "modif"):
-			resource = BrightYellow + resource + Reset
+			resource = Yellow + resource + Reset
 		case strings.Contains(actionLower, "delet"), strings.Contains(actionLower, "destroy"):
 			resource = BrightRed + resource + Reset
 		case strings.Contains(actionLower, "refresh"), strings.Contains(actionLower, "read"):

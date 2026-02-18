@@ -155,7 +155,7 @@ var (
 	DebugStyle   = MessageStyle{Prefix: "DEBUG", Color: Gray, SchemaPrefix: BuildProviderPrefix(DefaultProviderName, OpDebug)}
 
 	InitStyle     = MessageStyle{Prefix: "INIT", Color: BrightCyan, SchemaPrefix: BuildProviderPrefix(DefaultProviderName, OpInit), Bold: true}
-	PlanStyle     = MessageStyle{Prefix: "PLAN", Color: BrightYellow, SchemaPrefix: BuildProviderPrefix(DefaultProviderName, OpPlan), Bold: true}
+	PlanStyle     = MessageStyle{Prefix: "PLAN", Color: Yellow, SchemaPrefix: BuildProviderPrefix(DefaultProviderName, OpPlan), Bold: true}
 	ApplyStyle    = MessageStyle{Prefix: "APPLY", Color: BrightGreen, SchemaPrefix: BuildProviderPrefix(DefaultProviderName, OpApply), Bold: true}
 	DestroyStyle  = MessageStyle{Prefix: "DESTROY", Color: BrightRed, SchemaPrefix: BuildProviderPrefix(DefaultProviderName, OpDestroy), Bold: true}
 	ValidateStyle = MessageStyle{Prefix: "VALIDATE", Color: BrightBlue, SchemaPrefix: BuildProviderPrefix(DefaultProviderName, OpValidate), Bold: true}
