@@ -5,6 +5,8 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"syscall"
+	"unsafe"
 )
 
 // Reset / ANSI color codes
@@ -559,22 +561,59 @@ func FormatLogLine(severity string, component string, message string, options St
 // =============================================================================
 
 const (
-	// DefaultTerminalWidth is the default terminal width for formatting
-	DefaultTerminalWidth = 80
+	// DefaultTerminalWidth is the fallback terminal width when detection fails
+	DefaultTerminalWidth = 120
 	// DefaultWrapWidth is the default text wrap width (leaving margin)
-	DefaultWrapWidth = 78
+	DefaultWrapWidth = 118
 	// MinWrapWidth is the minimum width before wrapping is disabled
 	MinWrapWidth = 40
 )
 
-// GetTerminalWidth returns the terminal width from environment or default
+// GetTerminalWidth returns the actual terminal width, falling back to env or default.
 func GetTerminalWidth() int {
+	// 1. Check COLUMNS env var (explicit override)
 	if cols := os.Getenv("COLUMNS"); cols != "" {
-		if width := parseIntOrDefault(cols, DefaultTerminalWidth); width > 0 {
+		if width := parseIntOrDefault(cols, 0); width > 0 {
 			return width
 		}
 	}
+
+	// 2. Try to detect from stdout
+	if w := getTerminalWidthFromFd(syscall.Stdout); w > 0 {
+		return w
+	}
+
+	// 3. Try stderr (stdout may be piped)
+	if w := getTerminalWidthFromFd(syscall.Stderr); w > 0 {
+		return w
+	}
+
 	return DefaultTerminalWidth
+}
+
+// getTerminalWidthFromFd queries the terminal width via TIOCGWINSZ ioctl.
+// Returns 0 if the fd is not a terminal or the query fails.
+func getTerminalWidthFromFd(fd int) int {
+	if runtime.GOOS == "windows" {
+		return 0 // Windows uses a different mechanism; fall back to default
+	}
+	type winsize struct {
+		Row    uint16
+		Col    uint16
+		Xpixel uint16
+		Ypixel uint16
+	}
+	var ws winsize
+	// TIOCGWINSZ = 0x5413 on Linux, 0x40087468 on macOS
+	tiocgwinsz := uintptr(0x5413)
+	if runtime.GOOS == "darwin" {
+		tiocgwinsz = 0x40087468
+	}
+	_, _, err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), tiocgwinsz, uintptr(unsafe.Pointer(&ws)))
+	if err != 0 {
+		return 0
+	}
+	return int(ws.Col)
 }
 
 // parseIntOrDefault parses a string to int, returning default on failure
