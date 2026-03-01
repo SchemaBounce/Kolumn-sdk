@@ -5,8 +5,6 @@ import (
 	"os"
 	"runtime"
 	"strings"
-	"syscall"
-	"unsafe"
 )
 
 // Reset / ANSI color codes
@@ -578,42 +576,12 @@ func GetTerminalWidth() int {
 		}
 	}
 
-	// 2. Try to detect from stdout
-	if w := getTerminalWidthFromFd(syscall.Stdout); w > 0 {
-		return w
-	}
-
-	// 3. Try stderr (stdout may be piped)
-	if w := getTerminalWidthFromFd(syscall.Stderr); w > 0 {
+	// 2. Try platform-specific terminal width detection (implemented in terminal_*.go)
+	if w := detectTerminalWidth(); w > 0 {
 		return w
 	}
 
 	return DefaultTerminalWidth
-}
-
-// getTerminalWidthFromFd queries the terminal width via TIOCGWINSZ ioctl.
-// Returns 0 if the fd is not a terminal or the query fails.
-func getTerminalWidthFromFd(fd int) int {
-	if runtime.GOOS == "windows" {
-		return 0 // Windows uses a different mechanism; fall back to default
-	}
-	type winsize struct {
-		Row    uint16
-		Col    uint16
-		Xpixel uint16
-		Ypixel uint16
-	}
-	var ws winsize
-	// TIOCGWINSZ = 0x5413 on Linux, 0x40087468 on macOS
-	tiocgwinsz := uintptr(0x5413)
-	if runtime.GOOS == "darwin" {
-		tiocgwinsz = 0x40087468
-	}
-	_, _, err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), tiocgwinsz, uintptr(unsafe.Pointer(&ws)))
-	if err != 0 {
-		return 0
-	}
-	return int(ws.Col)
 }
 
 // parseIntOrDefault parses a string to int, returning default on failure
