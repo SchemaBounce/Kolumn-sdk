@@ -559,21 +559,28 @@ func FormatLogLine(severity string, component string, message string, options St
 // =============================================================================
 
 const (
-	// DefaultTerminalWidth is the default terminal width for formatting
-	DefaultTerminalWidth = 80
+	// DefaultTerminalWidth is the fallback terminal width when detection fails
+	DefaultTerminalWidth = 120
 	// DefaultWrapWidth is the default text wrap width (leaving margin)
-	DefaultWrapWidth = 78
+	DefaultWrapWidth = 118
 	// MinWrapWidth is the minimum width before wrapping is disabled
 	MinWrapWidth = 40
 )
 
-// GetTerminalWidth returns the terminal width from environment or default
+// GetTerminalWidth returns the actual terminal width, falling back to env or default.
 func GetTerminalWidth() int {
+	// 1. Check COLUMNS env var (explicit override)
 	if cols := os.Getenv("COLUMNS"); cols != "" {
-		if width := parseIntOrDefault(cols, DefaultTerminalWidth); width > 0 {
+		if width := parseIntOrDefault(cols, 0); width > 0 {
 			return width
 		}
 	}
+
+	// 2. Try platform-specific terminal width detection (implemented in terminal_*.go)
+	if w := detectTerminalWidth(); w > 0 {
+		return w
+	}
+
 	return DefaultTerminalWidth
 }
 

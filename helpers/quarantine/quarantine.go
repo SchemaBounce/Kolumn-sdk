@@ -12,7 +12,13 @@ const (
 	defaultPrefix       = "delete"
 	defaultMaxLength    = 255
 	minPrefixCharacters = 16
-	timeFormat          = "20060102T150405Z"
+	// timeFormat uses microsecond precision so two quarantine snapshots
+	// generated for the same table inside the same second don't collide
+	// (`pq: relation "..." already exists`). Observed end-to-end when two
+	// migrations target the same table back-to-back — the first migration
+	// snapshotted at second granularity and the second migration's apply
+	// failed because the destination table was already in kolumn_quarantine.
+	timeFormat = "20060102T150405.000000Z"
 )
 
 var sanitizeIdentifierPattern = regexp.MustCompile(`[^a-zA-Z0-9_]+`)
