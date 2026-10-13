@@ -1,0 +1,29 @@
+apiVersion: schemabounce.com/v1
+kind: RepoRuntime
+
+toolchain:
+  # gcc because the tests run with -race, which needs cgo.
+  required: [go, git, gcc]
+  goVersion: '1.22'
+
+# Requests, not grants. The platform clamps each to the workspace tier and
+# records what it changed. The SDK is small (22 packages, no sibling-repo
+# replace directives), so it builds and tests whole in a small box in seconds.
+sandbox:
+  size: small
+  timeout: 45m
+  # An ecosystem name, never a hostname: the platform owns the host list.
+  ecosystems: [go]
+
+defaults:
+  engine: claude_code
+  # An alias the platform resolves to the newest model in the line (dec-104).
+  model: sonnet_latest
+
+handoff:
+  # Agent sessions branch from development and their PRs target it; main is
+  # refused for agent sessions unless named here (core-api#2719). A release of
+  # the SDK is a promotion to main, which stays a person's decision.
+  baseBranch: development
+  branchPrefix: sb-code/
+  commitConvention: conventional

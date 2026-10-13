@@ -1,0 +1,137 @@
+apiVersion: schemabounce.com/v1
+kind: RepoPipeline
+
+# How a ticket becomes finished work in the Kolumn provider SDK (dec-110).
+#
+# Every provider builds against this module, so the bar is the interface
+# contract, not just green tests. Only a check, a fresh review or an approval
+# can gate the push; a fresh review runs in the isolated reviewer Job (dec-105,
+# dec-111) and never sees the coder's conversation.
+#
+# The repository's scripts/ checks (banned terms, interface compliance, schema
+# and naming) are not used: each increments a counter with ((x++)) under
+# set -e, which exits the script the first time the counter is zero, so they
+# fail on a clean tree without reporting anything. The checks below cover the
+# same ground with commands that work.
+
+setup:
+  - name: modules
+    run: go mod download
+    timeout: 10m
+
+pipeline:
+  - name: plan
+    uses: plan
+    maxUnits: 6
+    guidance: |
+      Split by behavior a provider author can observe: one exported function,
+      handler or helper, with its test, per unit.
+
+      The Provider interface has exactly four methods (Configure, Schema,
+      CallFunction, Close). Never plan a unit that adds a method to it; new
+      behavior is a CallFunction function or a helper. Validation lives
+      inside Configure().
+
+      A change to an exported signature breaks every provider repository that
+      builds against this SDK. Say so in the unit title and name the
+      providers' call sites the change affects.
+
+      Never plan a unit whose acceptance is "tests pass". Say what a provider
+      can now do, or what it can no longer get wrong.
+
+  - name: implement
+    uses: implement
+
+  # A failure goes back to a fix turn, up to two times. The whole module is
+  # small: build, vet and the race-enabled suite take seconds, so they run in
+  # full rather than scoped, matching CLAUDE.md's build and test commands.
+  - name: validate
+    uses: check
+    onFail:
+      retry: { maxAttempts: 2 }
+      then: fail
+    commands:
+      # Lists tracked and new files: the check runs before the agent commits,
+      # so a file it just created is untracked and still has to be formatted.
+      - name: gofmt
+        run: |
+          FILES=$(git ls-files --cached --others --exclude-standard -- '*.go' \
+            | while read -r f; do [ -f "$f" ] && echo "$f"; done)
+          [ -z "$FILES" ] && exit 0
+          # shellcheck disable=SC2086
+          OUT=$(gofmt -l $FILES)
+          [ -z "$OUT" ] || { echo "not gofmt-formatted:"; echo "$OUT"; exit 1; }
+        severity: blocking
+        timeout: 5m
+
+      - name: build
+        run: go build ./...
+        severity: blocking
+        timeout: 10m
+        env: { GOMAXPROCS: '2', GOMEMLIMIT: '1200MiB' }
+
+      - name: vet
+        run: go vet ./...
+        severity: blocking
+        timeout: 10m
+        env: { GOMAXPROCS: '2', GOMEMLIMIT: '1200MiB' }
+
+      - name: tests
+        run: go test -race -count=1 ./...
+        severity: blocking
+        timeout: 15m
+        when:
+          paths: ['**/*.go', 'go.mod', 'go.sum']
+        env: { GOMAXPROCS: '2', GOMEMLIMIT: '1200MiB' }
+
+      # The SDK bans the word "terraform" (Makefile check-banned-terms), but
+      # existing exported names such as FormatTerraformStyle already contain
+      # it, so this looks only at lines the change ADDS. Advisory: a new call
+      # to one of those existing names is legitimate.
+      - name: banned-terms
+        run: |
+          ADDED=$( { git diff --no-color -U0 HEAD -- '*.go' '*.md' ':!CLAUDE.md' ':!scripts/check-banned-terms.sh' \
+                       | grep -E '^\+[^+]' || true
+                     git ls-files --others --exclude-standard -- '*.go' '*.md' \
+                       | while read -r f; do [ -f "$f" ] && sed "s|^|+$f: |" "$f"; done; } \
+                   | grep -i 'terraform' || true)
+          [ -z "$ADDED" ] || { echo "added lines mention a banned term:"; echo "$ADDED"; exit 1; }
+        severity: advisory
+        timeout: 5m
+
+  - name: evaluate
+    uses: review
+    context: fresh
+    onFail:
+      retry: { maxAttempts: 2 }
+      then: fail
+    guidance: |
+      Judge the work against the plan's acceptance criteria, not against the
+      code you would have written. Remember that every provider repository
+      builds against this module.
+    criteria:
+      - name: acceptance-met
+        threshold: 0.9
+        guidance: |
+          Every acceptance criterion in the plan is demonstrably met. Point at
+          the file and line, or the command whose output shows it.
+      - name: interface-contract
+        threshold: 0.8
+        guidance: |
+          The Provider interface still has exactly four methods. Context is
+          the first parameter of every new function, every error is checked
+          and wrapped (never discarded with _), every new exported identifier
+          has a GoDoc comment, and nothing simulates infrastructure. Any
+          change to an exported signature is called out with the providers it
+          breaks.
+      - name: test-coverage
+        threshold: 0.6
+        # Advisory. The blocking bar for tests is the validate check, which
+        # runs them. This scores whether the new tests are worth having.
+        blocking: false
+
+complete:
+  # A pull request into development (runtime.yaml handoff.baseBranch) that a
+  # person merges. Releasing the SDK to providers is a promotion to main, a
+  # separate human decision.
+  endpoint: pr

@@ -1,0 +1,80 @@
+apiVersion: schemabounce.com/v1
+kind: RepoContext
+
+# An INDEX over instruction files that already exist. CLAUDE.md, the rules and
+# the docs stay where they are and stay authoritative; this only says which of
+# them matter, when, and in one line, why.
+#
+# Every provider repository builds against this SDK, so a change here reaches
+# every provider at once. The always-loaded pair below is the contract they all
+# depend on.
+
+always:
+  - path: CLAUDE.md
+    kind: instructions
+    summary: 'Canonical SDK contract: the 4-method Provider interface, build and test commands, rules.'
+  - path: 4-METHOD-PATTERN.md
+    kind: instructions
+    summary: 'Configure, Schema, CallFunction, Close and nothing else; resource operations route through CallFunction.'
+
+entries:
+  - id: provider-specification
+    path: docs/PROVIDER_SPECIFICATION.md
+    kind: doc
+    summary: 'The authoritative spec every provider must meet: dispatch, schema, naming, errors.'
+    trigger:
+      pathGlobs: ['core/**', 'create/**', 'discover/**', 'runtime/**', 'runtimehelpers/**']
+      keywords: ['provider', 'specification', 'callfunction', 'dispatch', 'schema']
+    priority: required
+
+  - id: runtime-contract
+    path: docs/interface.md
+    kind: doc
+    summary: 'The provider-neutral runtime interface core Kolumn and providers both rely on.'
+    trigger:
+      pathGlobs: ['runtime/**', 'runtimehelpers/**', 'core/**']
+      keywords: ['runtime', 'interface', 'rpc', 'transport']
+
+  - id: discovery
+    path: docs/DISCOVERY.md
+    kind: doc
+    summary: 'The database discovery interface: how DISCOVER objects introspect existing infrastructure.'
+    trigger:
+      pathGlobs: ['discover/**']
+      keywords: ['discover', 'introspection', 'discovery']
+
+  - id: schema-testing
+    path: docs/SCHEMA_TESTING.md
+    kind: doc
+    summary: 'Schema consistency tests: Schema() must match what the provider actually implements.'
+    trigger:
+      pathGlobs: ['testing/**', 'docs/schema/**']
+      keywords: ['schema test', 'schema drift', 'consistency']
+
+  - id: validation-guide
+    path: docs/VALIDATION_GUIDE.md
+    kind: doc
+    summary: 'Validation lives inside Configure(); ValidateConfig was removed from the interface.'
+    trigger:
+      pathGlobs: ['helpers/validation/**', 'core/**']
+      keywords: ['validate', 'validation', 'configure']
+
+  - id: ci-path-filters
+    path: .claude/rules/ci-path-filters.md
+    kind: rule
+    summary: 'Build and test workflows trigger only on build-relevant paths, with paths: allowlists.'
+    trigger:
+      pathGlobs: ['.github/**', 'Makefile']
+      keywords: ['workflow', 'ci', 'github actions', 'paths']
+
+  - id: ui-colors
+    path: .claude/rules/ui-colors.md
+    kind: rule
+    summary: 'BrightYellow is banned in CLI output; use Yellow for warnings, drift and updates.'
+    trigger:
+      pathGlobs: ['helpers/ui/**']
+      keywords: ['color', 'ansi', 'yellow', 'output format']
+
+exclude:
+  - '**/vendor/**'
+  - 'Kolumn-sdk/**'
