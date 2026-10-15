@@ -1,0 +1,82 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker compose:*)",
+      "Bash(docker-compose:*)",
+      "Bash(docker:*)",
+      "Bash(kubectl:*)",
+      "Bash(kubectl get:*)",
+      "Bash(kubectl logs:*)",
+      "Bash(kubectl exec:*)",
+      "Bash(kubectl describe:*)",
+      "Bash(kubectl apply:*)",
+      "Bash(kubectl delete:*)",
+      "Bash(./scripts/restart-all.sh:*)",
+      "Bash(bash scripts/restart-all.sh:*)",
+      "Bash(/mnt/c/git/scripts/restart-all.sh:*)",
+      "Bash(/mnt/c/git/Kolumn-terraform/scripts/restart-all.sh:*)",
+      "Bash(curl:*)",
+      "Bash(redis-cli:*)",
+      "Bash(psql:*)",
+      "Bash(mysql:*)",
+      "Bash(mongosh:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(go test:*)",
+      "Bash(go build:*)",
+      "Bash(go run:*)",
+      "Bash(make:*)",
+      "Bash(git:*)",
+      "Bash(gh:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(chmod:*)",
+      "Bash(mkdir:*)",
+      "Bash(rm:*)",
+      "Bash(echo:*)",
+      "Bash(cd:*)",
+      "Bash(pwd:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(touch:*)",
+      "Bash(wc:*)",
+      "Bash(sort:*)",
+      "Bash(uniq:*)",
+      "Bash(sed:*)",
+      "Bash(awk:*)",
+      "Bash(jq:*)",
+      "Bash(python3:*)",
+      "Bash(node:*)",
+      "Bash(tee:*)",
+      "Bash(xargs:*)",
+      "Bash(timeout:*)"
+    ],
+    "deny": []
+  },
+  "enabledMcpjsonServers": [
+    "memory",
+    "sequential-thinking",
+    "context7",
+    "chrome-devtools",
+    "argocd",
+    "kolumn",
+    "filesystem",
+    "kubernetes",
+    "fetch"
+  ],
+  "extraKnownMarketplaces": {
+    "schemabounce": {
+      "source": {
+        "source": "github",
+        "repo": "SchemaBounce/claude-plugins"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "schemabounce@schemabounce": true
+  }
+}
