@@ -73,7 +73,8 @@
       "source": {
         "source": "github",
         "repo": "SchemaBounce/claude-plugins"
-      }
+      },
+      "autoUpdate": true
     }
   },
   "enabledPlugins": {
