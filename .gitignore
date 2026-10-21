@@ -34,8 +34,11 @@ go.work.sum
 *~
 
 # Claude Code (all subdirectories too)
-.claude/
-**/.claude/
+.claude/*
+**/.claude/*
+# The shared project settings file is versioned: it enables the SchemaBounce
+# agent kit for everyone here (dec-125 clause 1). Local settings stay ignored.
+!.claude/settings.json
 .mcp.json
 
 # Security scanning baselines (internal tooling)
