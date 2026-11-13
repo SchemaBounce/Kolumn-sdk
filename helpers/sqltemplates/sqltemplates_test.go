@@ -1,7 +1,9 @@
 package sqltemplates
 
 import (
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -148,5 +150,42 @@ func TestAdapterDispatchMacros(t *testing.T) {
 	}
 	if !strings.Contains(sql, "INTERVAL") {
 		t.Fatalf("expected INTERVAL arithmetic in rendered SQL, got %q", sql)
+	}
+}
+
+// RenderWithContext is called from many goroutines: every provider handler
+// renders its SQL templates, and handler tests run in parallel. Run this test
+// with -race. pongo2.FromString writes an unguarded flag on the shared default
+// template set, so the compile step needs a lock.
+func TestRenderWithContextIsSafeForConcurrentUse(t *testing.T) {
+	adapter := AdapterInfo{Name: "postgres"}
+	const goroutines = 32
+	const rendersPerGoroutine = 20
+
+	var wg sync.WaitGroup
+	errs := make(chan error, goroutines*rendersPerGoroutine)
+	for g := 0; g < goroutines; g++ {
+		wg.Add(1)
+		go func(g int) {
+			defer wg.Done()
+			for i := 0; i < rendersPerGoroutine; i++ {
+				raw := fmt.Sprintf("SELECT {{ n }} AS g%d_i%d", g, i)
+				want := fmt.Sprintf("SELECT %d AS g%d_i%d", g*1000+i, g, i)
+				got, err := RenderWithContext(raw, adapter, map[string]interface{}{"n": g*1000 + i})
+				if err != nil {
+					errs <- err
+					return
+				}
+				if got != want {
+					errs <- fmt.Errorf("render mismatch: got %q, want %q", got, want)
+					return
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
 	}
 }
