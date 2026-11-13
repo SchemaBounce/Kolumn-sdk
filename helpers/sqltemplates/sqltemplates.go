@@ -20,6 +20,13 @@ type MacroFunc func(adapter AdapterInfo, args ...interface{}) (string, error)
 var (
 	macroMu       sync.RWMutex
 	macroRegistry = map[string]map[string]MacroFunc{}
+
+	// compileMu serializes template compilation. pongo2.FromString uses the
+	// shared default template set, and in pongo2 v6.0.0 it writes the flag
+	// set.firstTemplateCreated with no lock. Two goroutines that compile at the
+	// same time are a data race, even though both write true. Executing a
+	// compiled template needs no lock.
+	compileMu sync.Mutex
 )
 
 func init() {
@@ -51,6 +58,13 @@ func Render(raw string, adapter AdapterInfo) (string, error) {
 	return RenderWithContext(raw, adapter, nil)
 }
 
+// compileTemplate compiles a template source under compileMu.
+func compileTemplate(source string) (*pongo2.Template, error) {
+	compileMu.Lock()
+	defer compileMu.Unlock()
+	return pongo2.FromString(source)
+}
+
 // RenderWithContext compiles the SQL template with optional user context (resource handles, helpers, etc.).
 func RenderWithContext(raw string, adapter AdapterInfo, templateCtx map[string]interface{}) (string, error) {
 	raw = strings.TrimSpace(raw)
@@ -58,7 +72,7 @@ func RenderWithContext(raw string, adapter AdapterInfo, templateCtx map[string]i
 		return raw, nil
 	}
 
-	tmpl, err := pongo2.FromString("{% autoescape off %}" + raw + "{% endautoescape %}")
+	tmpl, err := compileTemplate("{% autoescape off %}" + raw + "{% endautoescape %}")
 	if err != nil {
 		return "", err
 	}
