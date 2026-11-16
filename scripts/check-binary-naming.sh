@@ -11,9 +11,12 @@
 #      module name contains "provider" must be named kolumn-provider-{name}.
 #   2. Provider binaries: a `go build -o <out>` in a build file or doc whose
 #      output name contains "provider" must be kolumn-provider-{name}.
+#      Rules 1 and 2 only see names that say "provider": a provider binary
+#      named plainly `mydb` is indistinguishable from any other tool here.
 #   3. Provider names in docs and build files: every concrete
-#      kolumn-provider-<x> must be a valid name (the literal placeholder
-#      kolumn-provider-{name} is allowed).
+#      kolumn-provider-<x> must be a valid name. The placeholder
+#      kolumn-provider-{name}, shell-templated names (kolumn-provider-$NAME,
+#      kolumn-provider-${NAME}) and sentence-ending dots are not violations.
 #   4. README.md must still state the rule, and its `go mod init` example
 #      must use a valid kolumn-provider-{name} module.
 #
@@ -79,7 +82,10 @@ done < <(find . \( -path ./.git -o -path ./examples -o -path ./templates -o -pat
 echo -e "${BLUE}Provider binaries (go build -o)...${NC}"
 for f in "${doc_and_build_files[@]}"; do
     while IFS=: read -r line_num out; do
+        out="${out//[\`\"\']/}"           # drop quotes and backticks around the path
+        [[ $out == *'$'* ]] && continue   # shell-templated output name
         name=$(basename "$out" .exe)
+        while [[ $name == *. ]]; do name="${name%.}"; done
         if [[ $name == *provider* ]]; then
             check_name "$f:$line_num" "$name"
         fi
@@ -92,8 +98,10 @@ echo -e "${BLUE}Provider names in docs and build files...${NC}"
 for f in "${doc_and_build_files[@]}"; do
     while IFS=: read -r line_num token; do
         [[ $token == "$PLACEHOLDER" ]] && continue
+        [[ $token == *'$'* ]] && continue
+        while [[ $token == *. ]]; do token="${token%.}"; done
         check_name "$f:$line_num" "$token"
-    done < <(grep -noE 'kolumn-provider-[^][:space:]`"'"'"'(),;:<>|*/\\]*' "$f" 2>/dev/null || true)
+    done < <(grep -noE 'kolumn-provider-[^][:space:]`"'"'"'(),;:<>|*/\\$]*\$?' "$f" 2>/dev/null || true)
 done
 
 # 4. What README.md requires of provider authors.

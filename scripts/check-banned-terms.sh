@@ -37,19 +37,21 @@ readonly ALLOWED_IDENTIFIERS=(
 # term after removing the identifiers allowed for that file.
 banned_lines() {
     local file="$1"
-    local sed_args=()
+    local sed_args=(-e ':a')
     local entry
     for entry in "${ALLOWED_IDENTIFIERS[@]}"; do
         if [[ "${entry%%|*}" == "$file" ]]; then
-            # Whole-identifier match only: FormatTerraformStyleX is not allowed.
-            sed_args+=(-e "s/\\b${entry#*|}\\b//g")
+            # Whole-identifier match only (FormatTerraformStyleX is not
+            # allowed), in portable ERE rather than GNU-only \b. One removal
+            # per pass; "ta" loops until none are left on the line.
+            sed_args+=(-e "s/(^|[^A-Za-z0-9_])${entry#*|}([^A-Za-z0-9_]|\$)/\1\2/" -e 'ta')
         fi
     done
-    if [[ ${#sed_args[@]} -eq 0 ]]; then
+    if [[ ${#sed_args[@]} -eq 1 ]]; then
         grep -nHi "terraform" "$file" 2>/dev/null || true
         return
     fi
-    sed "${sed_args[@]}" "$file" | grep -ni "terraform" 2>/dev/null | sed "s|^|$file:|" || true
+    sed -E "${sed_args[@]}" "$file" | grep -ni "terraform" 2>/dev/null | sed "s|^|$file:|" || true
 }
 
 # Direct approach - check files one by one using find
