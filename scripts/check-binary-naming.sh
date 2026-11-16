@@ -1,232 +1,128 @@
 #!/bin/bash
 #
-# Validate provider binary naming convention
-# Ensures all provider binaries follow the kolumn-provider-{name} pattern
+# Validate the provider binary naming convention: kolumn-provider-{name}.
+#
+# Kolumn discovers provider binaries by that prefix (cmd/kolumn-docs-gen strips
+# it the same way), and README.md tells provider authors to name the project
+# directory, the module and the binary kolumn-provider-{name}. This SDK repo
+# ships no provider of its own, so the check guards what it does contain:
+#
+#   1. Provider modules: a go.mod outside examples/ and templates/ whose
+#      module name contains "provider" must be named kolumn-provider-{name}.
+#   2. Provider binaries: a `go build -o <out>` in a build file or doc whose
+#      output name contains "provider" must be kolumn-provider-{name}.
+#   3. Provider names in docs and build files: every concrete
+#      kolumn-provider-<x> must be a valid name (the literal placeholder
+#      kolumn-provider-{name} is allowed).
+#   4. README.md must still state the rule, and its `go mod init` example
+#      must use a valid kolumn-provider-{name} module.
+#
+# Example directories (examples/*) are demos built with `go run`, not
+# provider binaries, so their directory names are not checked.
 #
 
 set -euo pipefail
 
-# Colors for output
 readonly RED='\033[0;31m'
-readonly YELLOW='\033[1;33m'
 readonly GREEN='\033[0;32m'
 readonly BLUE='\033[0;34m'
 readonly NC='\033[0m' # No Color
 
-echo -e "${GREEN}Checking provider binary naming convention...${NC}"
+# Always run from the repository root so relative paths resolve.
+cd "$(dirname "$0")/.."
+
+readonly REQUIRED_PATTERN='^kolumn-provider-[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+readonly PLACEHOLDER='kolumn-provider-{name}'
 
 violations_found=0
-providers_checked=0
+names_checked=0
 
-# Required binary naming pattern
-readonly REQUIRED_PATTERN="^kolumn-provider-[a-z0-9][a-z0-9-]*[a-z0-9]$"
+fail() {
+    echo -e "${RED}  ❌ $*${NC}"
+    violations_found=$((violations_found + 1))
+}
 
-# Function to check binary name in go build or go install commands
-check_binary_names_in_file() {
-    local file="$1"
-    
-    echo -e "${BLUE}Checking $file for binary naming...${NC}"
-    
-    # Look for go build commands with -o flag
-    local build_commands
-    build_commands=$(grep -n "go build.*-o" "$file" 2>/dev/null || true)
-    
-    if [[ -n "$build_commands" ]]; then
-        echo -e "${BLUE}  Found go build commands:${NC}"
-        while IFS= read -r line; do
-            local line_num
-            line_num=$(echo "$line" | cut -d: -f1)
-            local command
-            command=$(echo "$line" | cut -d: -f2-)
-            
-            echo -e "${BLUE}    Line $line_num: $command${NC}"
-            
-            # Extract binary name from -o flag
-            local binary_name
-            binary_name=$(echo "$command" | sed -n 's/.*-o[[:space:]]*\([^[:space:]]*\).*/\1/p')
-            
-            if [[ -n "$binary_name" ]]; then
-                # Remove path components and extensions
-                binary_name=$(basename "$binary_name" .exe)
-                
-                if [[ $binary_name =~ $REQUIRED_PATTERN ]]; then
-                    echo -e "${GREEN}      ✅ Binary name: $binary_name${NC}"
-                else
-                    echo -e "${RED}      ❌ Invalid binary name: $binary_name${NC}"
-                    echo -e "${YELLOW}         Must match pattern: kolumn-provider-{name}${NC}"
-                    violations_found=$((violations_found + 1))
-                fi
-                providers_checked=$((providers_checked + 1))
-            fi
-        done <<< "$build_commands"
-    fi
-    
-    # Look for main package declarations (suggests this will be a binary)
-    if grep -q "^package main" "$file" 2>/dev/null; then
-        echo -e "${BLUE}  Found main package - checking directory/file naming${NC}"
-        
-        # Get the directory name
-        local dir_name
-        dir_name=$(dirname "$file")
-        dir_name=$(basename "$dir_name")
-        
-        # Get the file name without extension
-        local file_name
-        file_name=$(basename "$file" .go)
-        
-        # List of allowed non-provider binaries
-        local ALLOWED_NON_PROVIDERS="kolumn-docs-gen kolumn-schema-gen"
-        
-        # Check if this is an allowed non-provider binary
-        if [[ " $ALLOWED_NON_PROVIDERS " == *" $dir_name "* ]]; then
-            echo -e "${GREEN}    ✅ Directory name: $dir_name (allowed non-provider binary)${NC}"
-        # Check if directory follows naming convention
-        elif [[ $dir_name =~ $REQUIRED_PATTERN ]]; then
-            echo -e "${GREEN}    ✅ Directory name: $dir_name${NC}"
-        elif [[ "$dir_name" == "." ]] || [[ "$dir_name" == "examples" ]] || [[ "$dir_name" == "cmd" ]]; then
-            echo -e "${YELLOW}    ⚠️  Generic directory name: $dir_name${NC}"
-        else
-            echo -e "${RED}    ❌ Directory name should match: kolumn-provider-{name}${NC}"
-            echo -e "${YELLOW}       Current: $dir_name${NC}"
-            violations_found=$((violations_found + 1))
-        fi
-        
-        # For main.go files, check if they're in properly named directories
-        if [[ "$file_name" == "main" ]]; then
-            local parent_dir
-            parent_dir=$(basename "$(dirname "$file")")
-            
-            # Allow main.go in provider directories, examples, or allowed non-provider binaries
-            if [[ ! $parent_dir =~ $REQUIRED_PATTERN ]] && \
-               [[ "$parent_dir" != "examples" ]] && \
-               [[ " $ALLOWED_NON_PROVIDERS " != *" $parent_dir "* ]]; then
-                echo -e "${YELLOW}    ⚠️  main.go should be in a kolumn-provider-{name} directory${NC}"
-                echo -e "${YELLOW}       Current directory: $parent_dir${NC}"
-            fi
-        fi
-        
-        providers_checked=$((providers_checked + 1))
+check_name() {
+    local where="$1" name="$2"
+    names_checked=$((names_checked + 1))
+    if [[ $name =~ $REQUIRED_PATTERN ]]; then
+        echo -e "${GREEN}  ✅ $where: $name${NC}"
+    else
+        fail "$where: '$name' must match kolumn-provider-{name} (lowercase letters, digits, hyphens)"
     fi
 }
 
-# Function to check Makefile or build scripts
-check_build_scripts() {
-    local makefiles
-    makefiles=$(find . -name "Makefile" -o -name "*.mk" -o -name "build.sh" -o -name "*.sh" | grep -v ".git" || true)
-    
-    if [[ -n "$makefiles" ]]; then
-        echo -e "${BLUE}Checking build scripts for binary naming...${NC}"
-        
-        for makefile in $makefiles; do
-            echo -e "${BLUE}  Checking $makefile...${NC}"
-            
-            # Look for binary names in build targets
-            local binary_refs
-            binary_refs=$(grep -n "kolumn-provider" "$makefile" 2>/dev/null || true)
-            
-            if [[ -n "$binary_refs" ]]; then
-                while IFS= read -r line; do
-                    local line_num
-                    line_num=$(echo "$line" | cut -d: -f1)
-                    local content
-                    content=$(echo "$line" | cut -d: -f2-)
-                    
-                    echo -e "${BLUE}    Line $line_num: $content${NC}"
-                    
-                    # Extract potential binary names
-                    local binaries
-                    binaries=$(echo "$content" | grep -oE "kolumn-provider-[a-z0-9-]+" || true)
-                    
-                    for binary in $binaries; do
-                        if [[ $binary =~ $REQUIRED_PATTERN ]]; then
-                            echo -e "${GREEN}      ✅ Binary reference: $binary${NC}"
-                        else
-                            echo -e "${RED}      ❌ Invalid binary reference: $binary${NC}"
-                            violations_found=$((violations_found + 1))
-                        fi
-                        providers_checked=$((providers_checked + 1))
-                    done
-                done <<< "$binary_refs"
-            fi
-        done
+echo -e "${GREEN}Checking provider binary naming convention...${NC}"
+
+# Docs and build files that name binaries. This script is excluded: it quotes
+# bad names on purpose.
+doc_and_build_files=()
+while IFS= read -r f; do
+    doc_and_build_files+=("$f")
+done < <(find . \( -path ./.git -o -path '*/vendor' \) -prune -o -type f \
+    \( -name '*.md' -o -name Makefile -o -name '*.mk' -o -name '*.sh' \
+       -o -name '*.yml' -o -name '*.yaml' \) \
+    -not -path ./scripts/check-binary-naming.sh -print | sort)
+
+# 1. Provider modules.
+echo -e "${BLUE}Provider modules (go.mod outside examples/ and templates/)...${NC}"
+while IFS= read -r mod; do
+    module=$(awk '$1 == "module" { print $2; exit }' "$mod")
+    last="${module##*/}"
+    if [[ $last == *provider* ]]; then
+        check_name "$mod" "$last"
     fi
-}
+done < <(find . \( -path ./.git -o -path ./examples -o -path ./templates -o -path '*/vendor' \) -prune \
+    -o -name go.mod -print | sort)
 
-# Function to check for README documentation about naming
-check_documentation() {
-    local readmes
-    readmes=$(find . -name "README.md" -o -name "*.md" | grep -v ".git" || true)
-    
-    if [[ -n "$readmes" ]]; then
-        echo -e "${BLUE}Checking documentation for binary naming guidance...${NC}"
-        
-        for readme in $readmes; do
-            if grep -q "kolumn-provider" "$readme" 2>/dev/null; then
-                echo -e "${GREEN}  ✅ $readme mentions provider naming${NC}"
-                
-                # Check if it shows the correct pattern
-                if grep -q "kolumn-provider-.*name" "$readme" 2>/dev/null; then
-                    echo -e "${GREEN}    ✅ Shows correct naming pattern${NC}"
-                else
-                    echo -e "${YELLOW}    ⚠️  Should show kolumn-provider-{name} pattern${NC}"
-                fi
-            fi
-        done
-    fi
-}
-
-# Find all relevant files
-FILES=$(find . -name "*.go" -o -name "main.go" | grep -E "(examples|cmd)" | head -20)
-
-if [[ -z "$FILES" ]]; then
-    echo -e "${YELLOW}⚠️  No example or cmd Go files found${NC}"
-else
-    for file in $FILES; do
-        if [[ -f "$file" ]]; then
-            check_binary_names_in_file "$file"
+# 2. Provider binaries built with go build -o.
+echo -e "${BLUE}Provider binaries (go build -o)...${NC}"
+for f in "${doc_and_build_files[@]}"; do
+    while IFS=: read -r line_num out; do
+        name=$(basename "$out" .exe)
+        if [[ $name == *provider* ]]; then
+            check_name "$f:$line_num" "$name"
         fi
-    done
+    done < <(grep -nE 'go build[^#]*[[:space:]]-o[[:space:]=]+[^[:space:]]+' "$f" 2>/dev/null |
+        sed -E 's/^([0-9]+):.*go build[^#]*[[:space:]]-o[[:space:]=]+([^[:space:]]+).*/\1:\2/' || true)
+done
+
+# 3. Provider names mentioned in docs and build files.
+echo -e "${BLUE}Provider names in docs and build files...${NC}"
+for f in "${doc_and_build_files[@]}"; do
+    while IFS=: read -r line_num token; do
+        [[ $token == "$PLACEHOLDER" ]] && continue
+        check_name "$f:$line_num" "$token"
+    done < <(grep -noE 'kolumn-provider-[^][:space:]`"'"'"'(),;:<>|*/\\]*' "$f" 2>/dev/null || true)
+done
+
+# 4. What README.md requires of provider authors.
+echo -e "${BLUE}README.md naming rule...${NC}"
+if ! grep -qF "$PLACEHOLDER" README.md; then
+    fail "README.md no longer states the $PLACEHOLDER naming rule"
 fi
-
-# Check build scripts
-check_build_scripts
-
-# Check documentation
-check_documentation
+init_lines=$(grep -nE 'go mod init[[:space:]]+[^[:space:]]+' README.md || true)
+if [[ -z $init_lines ]]; then
+    fail "README.md has no 'go mod init' example for a provider module"
+else
+    while IFS=: read -r line_num rest; do
+        module=$(sed -E 's/.*go mod init[[:space:]]+([^[:space:]]+).*/\1/' <<< "$rest")
+        check_name "README.md:$line_num (go mod init)" "${module##*/}"
+    done <<< "$init_lines"
+fi
 
 echo
 echo -e "${GREEN}📊 Binary Naming Summary:${NC}"
-echo -e "   Providers checked: $providers_checked"
+echo -e "   Names checked: $names_checked"
 echo -e "   Naming violations: $violations_found"
 
 if [ $violations_found -gt 0 ]; then
     echo
     echo -e "${RED}❌ BINARY NAMING VIOLATIONS FOUND!${NC}"
-    echo -e "${YELLOW}All provider binaries MUST follow this pattern:${NC}"
-    echo -e "   kolumn-provider-{name}"
-    echo
-    echo -e "${YELLOW}Examples of correct names:${NC}"
-    echo -e "   - kolumn-provider-postgres"
-    echo -e "   - kolumn-provider-mysql"
-    echo -e "   - kolumn-provider-redis"
-    echo -e "   - kolumn-provider-kafka"
-    echo -e "   - kolumn-provider-s3"
-    echo
-    echo -e "${YELLOW}Examples of incorrect names:${NC}"
-    echo -e "   - postgres-provider"
-    echo -e "   - kolumn-postgres"
-    echo -e "   - provider-postgres"
-    echo -e "   - mydb-provider"
-    echo
-    echo -e "${YELLOW}This naming convention enables automatic discovery by Kolumn core.${NC}"
+    echo "Provider modules and binaries must be named kolumn-provider-{name},"
+    echo "e.g. kolumn-provider-postgres. Kolumn discovers providers by this prefix."
     exit 1
 fi
 
-if [ $providers_checked -eq 0 ]; then
-    echo -e "${YELLOW}⚠️  No provider binaries found to check${NC}"
-    echo -e "${YELLOW}This is normal for SDK-only packages${NC}"
-    exit 0
-fi
-
-echo -e "${GREEN}✅ All provider binary names follow the correct convention!${NC}"
+echo -e "${GREEN}✅ Provider naming follows kolumn-provider-{name}${NC}"
 exit 0
