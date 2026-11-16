@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/schemabounce/kolumn-sdk/testing"
+	sdktesting "github.com/schemabounce/kolumn/sdk/testing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,13 +20,13 @@ func TestSchemaImplementationConsistency(t *testing.T) {
 	require.NotNil(t, provider)
 
 	// Configure the test using the SDK testing framework
-	config := &testing.SchemaTestConfig{
+	config := &sdktesting.SchemaTestConfig{
 		Provider:     provider,
 		StateAdapter: nil, // This example doesn't use a state adapter
 
 		// Expected configuration fields from the Configure method
 		// These MUST match exactly what your Configure() method accepts
-		ExpectedConfigFields: map[string]testing.ConfigFieldExpectation{
+		ExpectedConfigFields: map[string]sdktesting.ConfigFieldExpectation{
 			"endpoint": {
 				Required:    false,
 				FieldType:   "string",
@@ -46,7 +46,7 @@ func TestSchemaImplementationConsistency(t *testing.T) {
 
 		// Expected resource types that your provider implements
 		// These MUST match the ResourceTypes in your Schema() method
-		ExpectedResources: map[string]testing.ResourceExpectation{
+		ExpectedResources: map[string]sdktesting.ResourceExpectation{
 			"example_table": {
 				StateAdapterMethod: "", // No state adapter in this example
 				Operations:         []string{"create", "read", "update", "delete"},
@@ -68,7 +68,7 @@ func TestSchemaImplementationConsistency(t *testing.T) {
 	}
 
 	// Run the comprehensive schema consistency tests
-	testing.RunSchemaConsistencyTests(t, config)
+	sdktesting.RunSchemaConsistencyTests(t, config)
 }
 
 // TestSchemaConsistencyPreCommitHook is the entry point for pre-commit hook testing.
