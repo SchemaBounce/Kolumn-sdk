@@ -75,14 +75,8 @@ test: test-examples ## Run tests (root module and example modules)
 	@go test -race ./...
 	@echo -e "$(GREEN)✅ Tests passed$(NC)"
 
-test-examples: ## Vet and test example modules that have their own go.mod
-	@echo -e "$(GREEN)Testing example modules...$(NC)"
-	@set -e; for mod in $$(find examples -name go.mod); do \
-		dir=$$(dirname $$mod); \
-		echo -e "$(BLUE)  $$dir$(NC)"; \
-		(cd $$dir && go vet ./... && go test -race ./...); \
-	done
-	@echo -e "$(GREEN)✅ Example modules passed$(NC)"
+test-examples: ## Vet and test all examples (root-module packages and example modules)
+	@./scripts/validate-examples.sh
 
 test-verbose: ## Run tests with verbose output
 	@echo -e "$(GREEN)Running tests with verbose output...$(NC)"
@@ -128,10 +122,7 @@ pre-commit: ## Run pre-commit hooks manually
 	fi
 	@echo -e "$(GREEN)✅ Pre-commit hooks passed$(NC)"
 
-validate-examples: ## Validate example code
-	@echo -e "$(GREEN)Validating example code...$(NC)"
-	@./scripts/validate-examples.sh
-	@echo -e "$(GREEN)✅ Examples validated$(NC)"
+validate-examples: test-examples ## Alias for test-examples
 
 check-docs: ## Check documentation coverage
 	@echo -e "$(GREEN)Checking documentation coverage...$(NC)"
