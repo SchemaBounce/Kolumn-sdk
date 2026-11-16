@@ -5,8 +5,13 @@
 #
 # - The schema struct must keep the core compatibility fields
 #   (SupportedFunctions, ResourceTypes, ConfigSchema) with their JSON names.
-# - Every literal of it in non-test code must set Name and Version, and list
-#   only functions the unified dispatcher accepts in SupportedFunctions.
+# - A keyed literal of it that is returned directly must set Name and
+#   Version (a literal stored in a variable can be filled in afterwards and
+#   is not checked).
+# - Every function name given to SupportedFunctions (in a literal, a field
+#   assignment, an append or a variable in the same package) must be one
+#   core.UnifiedDispatcher.Dispatch accepts. Values returned by other
+#   function calls are not followed.
 #
 # The rules live in scripts/providercheck/main.go, which type-checks every
 # module in the repository. Other structs whose name contains "Schema" are not

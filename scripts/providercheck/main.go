@@ -13,13 +13,16 @@
 //     core/provider.go and README.md (Configure, Schema, CallFunction, Close
 //     with their current signatures).
 //   - Every named type that claims to be a provider must implement
-//     core.Provider. A type claims it when its method set has a CallFunction
-//     method (any signature: the unified dispatch entry point) or at least
-//     two of the four method names.
-//   - Exception: a type that implements sdktesting.SchemaProvider is a
-//     schema-testing provider. That interface's Schema() returns
-//     *sdktesting.ProviderSchema, so no type can implement both it and
-//     core.Provider; such types are reported as skipped, not checked.
+//     core.Provider, and every missing or mismatched method is reported. A
+//     type claims it when its method set has a CallFunction method (any
+//     signature: the unified dispatch entry point), or has at least two of
+//     the four method names and its Configure or Schema has core.Provider's
+//     exact signature. (Close() error alone is too common to count.)
+//   - Exception: a type the code explicitly declares as a schema-testing
+//     provider with `var _ sdktesting.SchemaProvider = (*T)(nil)`. That
+//     interface's Schema() returns *sdktesting.ProviderSchema, so no type can
+//     implement both it and core.Provider. Such types are listed as skipped;
+//     a type that only happens to match SchemaProvider is still checked.
 //   - Assignments such as `var _ core.Provider = (*T)(nil)` are already
 //     enforced by the compiler; a package that does not type-check fails here.
 //
@@ -230,7 +233,7 @@ func checkModule(mode, dir string) ([]string, error) {
 // packages, so a package that does not build fails here.
 func listPackages() ([]listedPackage, map[string]listedPackage, map[string]string, error) {
 	cmd := exec.Command("go", "list", "-e=false", "-export", "-deps",
-		"-json=ImportPath,Dir,GoFiles,Export,DepOnly,Module", "./...", corePath, testingPath)
+		"-json=ImportPath,Dir,GoFiles,Export,DepOnly,Module", "./...", corePath)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -323,18 +326,79 @@ func (c *checker) checkContract() {
 
 // claimsProvider reports whether a type presents itself as a core.Provider:
 // it has a CallFunction method under any signature, or at least two of the
-// interface's method names.
+// interface's method names with Configure or Schema matching core.Provider
+// exactly.
 func claimsProvider(mset *types.MethodSet, provider *types.Interface) bool {
 	if mset.Lookup(nil, "CallFunction") != nil {
 		return true
 	}
-	found := 0
+	found, exact := 0, false
 	for i := 0; i < provider.NumMethods(); i++ {
-		if mset.Lookup(nil, provider.Method(i).Name()) != nil {
-			found++
+		m := provider.Method(i)
+		sel := mset.Lookup(nil, m.Name())
+		if sel == nil {
+			continue
+		}
+		found++
+		if (m.Name() == "Configure" || m.Name() == "Schema") && types.Identical(sel.Type(), m.Type()) {
+			exact = true
 		}
 	}
-	return found >= 2
+	return found >= 2 && exact
+}
+
+// declaredSchemaProviders returns the names of types a package explicitly
+// declares as sdktesting.SchemaProvider: var _ sdktesting.SchemaProvider = (*T)(nil).
+func declaredSchemaProviders(p listedPackage) (map[string]bool, error) {
+	declared := map[string]bool{}
+	fset := token.NewFileSet()
+	for _, name := range p.GoFiles {
+		f, err := parser.ParseFile(fset, filepath.Join(p.Dir, name), nil, 0)
+		if err != nil {
+			return nil, err
+		}
+		alias := ""
+		for _, imp := range f.Imports {
+			if strings.Trim(imp.Path.Value, `"`) == testingPath {
+				alias = "testing"
+				if imp.Name != nil {
+					alias = imp.Name.Name
+				}
+			}
+		}
+		if alias == "" {
+			continue
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			vs, ok := n.(*ast.ValueSpec)
+			if !ok || len(vs.Names) != 1 || vs.Names[0].Name != "_" || len(vs.Values) != 1 {
+				return true
+			}
+			sel, ok := vs.Type.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "SchemaProvider" {
+				return true
+			}
+			if x, ok := sel.X.(*ast.Ident); !ok || x.Name != alias {
+				return true
+			}
+			// (*T)(nil)
+			call, ok := vs.Values[0].(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			paren, ok := call.Fun.(*ast.ParenExpr)
+			if !ok {
+				return true
+			}
+			if star, ok := paren.X.(*ast.StarExpr); ok {
+				if id, ok := star.X.(*ast.Ident); ok {
+					declared[id.Name] = true
+				}
+			}
+			return true
+		})
+	}
+	return declared, nil
 }
 
 func indexOf(iface *types.Interface, name string) int {
@@ -352,7 +416,7 @@ func (c *checker) checkImplementations(p listedPackage) error {
 	if err != nil {
 		return err
 	}
-	schemaProvider, err := loadInterface(imp, testingPath, "SchemaProvider")
+	declared, err := declaredSchemaProviders(p)
 	if err != nil {
 		return err
 	}
@@ -374,23 +438,27 @@ func (c *checker) checkImplementations(p listedPackage) error {
 			continue
 		}
 		ptr := types.NewPointer(named)
-		if !claimsProvider(types.NewMethodSet(ptr), provider) {
+		mset := types.NewMethodSet(ptr)
+		if !claimsProvider(mset, provider) {
 			continue
 		}
 		if types.Implements(ptr, provider) {
 			fmt.Printf("  ok   %s.%s implements core.Provider\n", p.ImportPath, name)
 			continue
 		}
-		if types.Implements(ptr, schemaProvider) {
-			fmt.Printf("  skip %s.%s implements sdktesting.SchemaProvider, which cannot also be a core.Provider\n", p.ImportPath, name)
+		if declared[name] {
+			fmt.Printf("  skip %s.%s is declared an sdktesting.SchemaProvider, which cannot also be a core.Provider\n", p.ImportPath, name)
 			continue
 		}
-		m, wrongType := types.MissingMethod(ptr, provider, true)
-		want := signature(m.Type().(*types.Signature))
-		if wrongType {
-			c.report(tn.Pos(), "%s claims to be a core.Provider but %s has the wrong signature (want %s%s)", name, m.Name(), m.Name(), want)
-		} else {
-			c.report(tn.Pos(), "%s claims to be a core.Provider but is missing %s%s", name, m.Name(), want)
+		for i := 0; i < provider.NumMethods(); i++ {
+			m := provider.Method(i)
+			want := signature(m.Type().(*types.Signature))
+			switch sel := mset.Lookup(nil, m.Name()); {
+			case sel == nil:
+				c.report(tn.Pos(), "%s claims to be a core.Provider but is missing %s%s", name, m.Name(), want)
+			case !types.Identical(sel.Type(), m.Type()):
+				c.report(tn.Pos(), "%s claims to be a core.Provider but %s has the wrong signature (want %s%s)", name, m.Name(), m.Name(), want)
+			}
 		}
 	}
 	return nil
