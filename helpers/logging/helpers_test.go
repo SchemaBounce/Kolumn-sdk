@@ -562,31 +562,48 @@ func TestMalformedJSONHandling(t *testing.T) {
 }
 
 func TestPerformanceWithLargeData(t *testing.T) {
-	logger, _ := NewTestLogger(t, "perf", true)
+	logger, capture := NewTestLogger(t, "perf", true)
 
 	// Create large data structure
+	const entries = 1000
 	largeData := make(map[string]interface{})
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < entries; i++ {
 		largeData[fmt.Sprintf("key_%d", i)] = strings.Repeat("value", 100)
 	}
 
 	// Time the JSON debug operation
 	start := time.Now()
 	logger.JSONDebug("large data", largeData)
-	duration := time.Since(start)
+	jsonDebugDuration := time.Since(start)
 
-	// Should complete within reasonable time (adjust threshold as needed)
-	if duration > 100*time.Millisecond {
-		t.Errorf("JSON debug took too long: %v", duration)
-	}
+	// The whole payload must be logged, whatever the build mode.
+	capture.AssertContains(t, "large data")
+	capture.AssertContains(t, fmt.Sprintf(`"key_%d"`, entries-1))
 
 	// Test human conversion performance
 	start = time.Now()
-	JSONToHuman(largeData, "performance test")
-	duration = time.Since(start)
+	human := JSONToHuman(largeData, "performance test")
+	jsonToHumanDuration := time.Since(start)
 
-	if duration > 50*time.Millisecond {
-		t.Errorf("JSONToHuman took too long: %v", duration)
+	if !strings.HasPrefix(human, "performance test: ") {
+		t.Errorf("JSONToHuman output missing context prefix: %.80q", human)
+	}
+	if got := strings.Count(human, "key_"); got != entries {
+		t.Errorf("JSONToHuman rendered %d entries, want %d", got, entries)
+	}
+
+	// The race detector slows execution by an unpredictable factor, so the
+	// wall-clock limits only hold for a normal build.
+	if raceEnabled {
+		t.Logf("race detector on: skipping wall-clock limits (JSONDebug %v, JSONToHuman %v)",
+			jsonDebugDuration, jsonToHumanDuration)
+		return
+	}
+	if jsonDebugDuration > 100*time.Millisecond {
+		t.Errorf("JSON debug took too long: %v", jsonDebugDuration)
+	}
+	if jsonToHumanDuration > 50*time.Millisecond {
+		t.Errorf("JSONToHuman took too long: %v", jsonToHumanDuration)
 	}
 }
 

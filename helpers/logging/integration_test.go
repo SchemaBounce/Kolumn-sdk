@@ -189,8 +189,12 @@ func TestLargeDataLogging(t *testing.T) {
 	LogRequest(DiscoveryLogger, "DiscoverResources", largeRequest)
 	duration := time.Since(start)
 
-	// Should complete within reasonable time
-	if duration > 100*time.Millisecond {
+	// Should complete within reasonable time. The race detector slows
+	// execution by an unpredictable factor, so the limit only holds for a
+	// normal build.
+	if raceEnabled {
+		t.Logf("race detector on: skipping wall-clock limit (took %v)", duration)
+	} else if duration > 100*time.Millisecond {
 		t.Errorf("Large data logging took too long: %v", duration)
 	}
 
