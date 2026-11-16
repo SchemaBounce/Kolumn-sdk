@@ -17,6 +17,41 @@ echo -e "${GREEN}Checking for banned terms...${NC}"
 violations_found=0
 total_files=0
 
+# Narrow exceptions: identifiers that are allowed to contain the banned term,
+# and only in the listed files. Each entry is "file|identifier".
+#
+# helpers/ui keeps FormatTerraformStyle and FormatTerraformStyleWithDuration
+# as deprecated aliases of FormatResourceAction and
+# FormatResourceActionWithDuration so existing callers (the Kolumn CLI) keep
+# compiling. Only those exact identifiers are allowed, only in those files;
+# any other mention of the term there still fails. Remove these entries when
+# the aliases are deleted.
+readonly ALLOWED_IDENTIFIERS=(
+    "./helpers/ui/human_output.go|FormatTerraformStyleWithDuration"
+    "./helpers/ui/human_output.go|FormatTerraformStyle"
+    "./helpers/ui/human_output_test.go|FormatTerraformStyleWithDuration"
+    "./helpers/ui/human_output_test.go|FormatTerraformStyle"
+)
+
+# banned_lines FILE prints the file's lines that still contain the banned
+# term after removing the identifiers allowed for that file.
+banned_lines() {
+    local file="$1"
+    local sed_args=()
+    local entry
+    for entry in "${ALLOWED_IDENTIFIERS[@]}"; do
+        if [[ "${entry%%|*}" == "$file" ]]; then
+            # Whole-identifier match only: FormatTerraformStyleX is not allowed.
+            sed_args+=(-e "s/\\b${entry#*|}\\b//g")
+        fi
+    done
+    if [[ ${#sed_args[@]} -eq 0 ]]; then
+        grep -nHi "terraform" "$file" 2>/dev/null || true
+        return
+    fi
+    sed "${sed_args[@]}" "$file" | grep -ni "terraform" 2>/dev/null | sed "s|^|$file:|" || true
+}
+
 # Direct approach - check files one by one using find
 echo -e "${GREEN}Scanning for Go and Markdown files...${NC}"
 
@@ -33,10 +68,11 @@ while IFS= read -r file; do
         echo -e "${GREEN}Checking file $total_files: $file${NC}"
         
         # Check for banned terms (case insensitive)
-        if grep -iq "terraform" "$file" 2>/dev/null; then
+        matches=$(banned_lines "$file")
+        if [[ -n "$matches" ]]; then
             echo -e "${RED}❌ BANNED TERM FOUND in $file${NC}"
             echo -e "${YELLOW}   Matches:${NC}"
-            grep -nHi "terraform" "$file" 2>/dev/null || true
+            echo "$matches"
             violations_found=$((violations_found + 1))
         fi
     fi

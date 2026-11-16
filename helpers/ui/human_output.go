@@ -222,10 +222,10 @@ func RenderLineWithCaret(line string, column int, annotation string, options Sty
 	return result
 }
 
-// FormatTerraformStyle renders output in Terraform's clean resource-first format:
+// FormatResourceAction renders a resource-first line:
 // resource_type.resource_name: Action...
 // resource_type.resource_name: Action complete [duration]
-func FormatTerraformStyle(resourceType, resourceName, action string, options StyleOptions) string {
+func FormatResourceAction(resourceType, resourceName, action string, options StyleOptions) string {
 	resourceType = strings.TrimSpace(resourceType)
 	resourceName = strings.TrimSpace(resourceName)
 	action = strings.TrimSpace(action)
@@ -262,9 +262,10 @@ func FormatTerraformStyle(resourceType, resourceName, action string, options Sty
 	return resource + ": " + action
 }
 
-// FormatTerraformStyleWithDuration includes timing information
-func FormatTerraformStyleWithDuration(resourceType, resourceName, action, duration string, options StyleOptions) string {
-	base := FormatTerraformStyle(resourceType, resourceName, action, options)
+// FormatResourceActionWithDuration renders the FormatResourceAction line
+// followed by the duration in brackets, e.g. "[1.2s]".
+func FormatResourceActionWithDuration(resourceType, resourceName, action, duration string, options StyleOptions) string {
+	base := FormatResourceAction(resourceType, resourceName, action, options)
 	if duration == "" {
 		return base
 	}
@@ -274,6 +275,20 @@ func FormatTerraformStyleWithDuration(resourceType, resourceName, action, durati
 		durationStr = Gray + durationStr + Reset
 	}
 	return base + " " + durationStr
+}
+
+// FormatTerraformStyle is the former name of FormatResourceAction.
+//
+// Deprecated: Use FormatResourceAction. Kept so existing callers keep compiling.
+func FormatTerraformStyle(resourceType, resourceName, action string, options StyleOptions) string {
+	return FormatResourceAction(resourceType, resourceName, action, options)
+}
+
+// FormatTerraformStyleWithDuration is the former name of FormatResourceActionWithDuration.
+//
+// Deprecated: Use FormatResourceActionWithDuration. Kept so existing callers keep compiling.
+func FormatTerraformStyleWithDuration(resourceType, resourceName, action, duration string, options StyleOptions) string {
+	return FormatResourceActionWithDuration(resourceType, resourceName, action, duration, options)
 }
 
 // ParseStructuredLog parses Go slog-style structured log lines and extracts key fields.
@@ -359,7 +374,8 @@ func tokenizeLogLine(line string) []string {
 	return tokens
 }
 
-// SimplifyProviderLog converts verbose provider logs to Terraform-style output.
+// SimplifyProviderLog converts verbose provider logs to resource-first output
+// (see FormatResourceAction).
 // Input: "2025/12/19 00:07:38 INFO Creating table backup component=postgres-capability-provider table=provider_registry schema=schemabounce_providers backup_table=backup_schemabounce_providers_provider_registry sql=\"CREATE TABLE...\""
 // Output: "postgres_table.provider_registry: Creating backup..."
 func SimplifyProviderLog(line string, providerType string, options StyleOptions) string {
@@ -402,9 +418,9 @@ func SimplifyProviderLog(line string, providerType string, options StyleOptions)
 	// Clean up message - remove redundant info already captured in fields
 	message = simplifyMessage(message)
 
-	// If we have a resource, format Terraform-style
+	// If we have a resource, render it resource-first
 	if resourceType != "" && resourceName != "" {
-		return FormatTerraformStyle(resourceType, resourceName, message, options)
+		return FormatResourceAction(resourceType, resourceName, message, options)
 	}
 
 	// Fallback: just clean the message and show it simply
