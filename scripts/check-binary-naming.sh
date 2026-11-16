@@ -17,11 +17,17 @@
 #      make variables ($(BINARY), ${NAME}) and does not follow a -o flag
 #      continued onto the next line.
 #   3. Provider names in docs and build files: every concrete
-#      kolumn-provider-<x> must be a valid name. Placeholders
-#      (kolumn-provider-{name}, kolumn-provider-<name>), shell-templated names
-#      (kolumn-provider-$NAME, kolumn-provider-${NAME}), a trailing .exe and
-#      sentence-ending dots are not violations. Release archive names such
-#      as kolumn-provider-x_1.0.0_linux_amd64.tar.gz would be reported.
+#      kolumn-provider-<x>, in any case, must be a valid name, so
+#      Kolumn-Provider-Postgres is reported. Placeholders
+#      (kolumn-provider-{name}, kolumn-provider-<name>) and shell-templated
+#      names (kolumn-provider-$NAME, kolumn-provider-${NAME}) are skipped.
+#      Before the name is checked, these are removed: sentence-ending dots, a
+#      module version (go install .../kolumn-provider-x@latest), a release
+#      archive extension (.zip, .tar.gz, .tgz), a trailing .exe, and a
+#      release tail of a version and/or a known GOOS_GOARCH pair
+#      (kolumn-provider-x_1.0.0_linux_amd64.tar.gz is the valid name
+#      kolumn-provider-x). Other suffixes, such as checksum files
+#      (kolumn-provider-x_1.0.0_checksums.txt), are reported.
 #   4. README.md must still state the rule, and its `go mod init` example
 #      must use a valid kolumn-provider-{name} module.
 #
@@ -41,6 +47,12 @@ cd "$(dirname "$0")/.."
 
 readonly REQUIRED_PATTERN='^kolumn-provider-[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
 readonly PLACEHOLDER='kolumn-provider-{name}'
+
+# A release tail after the name: _<version>, _<os>_<arch>, or both, as in
+# kolumn-provider-x_1.0.0_linux_amd64. Matched against the lower-cased token.
+readonly RELEASE_OS='linux|darwin|windows|freebsd|openbsd|netbsd|dragonfly|solaris|illumos|aix|android|ios|plan9|js|wasip1'
+readonly RELEASE_ARCH='amd64|arm64|386|arm|armv5|armv6|armv7|ppc64|ppc64le|mips|mipsle|mips64|mips64le|riscv64|s390x|loong64|wasm|x86_64|i386|all'
+readonly RELEASE_TAIL="(_v?[0-9]+(\\.[0-9]+)*([-+][0-9a-z.+-]*)?)?(_($RELEASE_OS)_($RELEASE_ARCH))?\$"
 
 violations_found=0
 names_checked=0
@@ -102,14 +114,23 @@ done
 echo -e "${BLUE}Provider names in docs and build files...${NC}"
 for f in "${doc_and_build_files[@]}"; do
     while IFS=: read -r line_num token; do
-        [[ $token == "$PLACEHOLDER" ]] && continue
+        token="${token%%@*}"                # go install ...@latest / @v1.2.3
+        lower=$(tr '[:upper:]' '[:lower:]' <<< "$token")
+        [[ $lower == "$PLACEHOLDER" ]] && continue
         [[ $token == *'$'* ]] && continue   # shell-templated
         [[ $token == *'{'* ]] && continue   # {placeholder}
-        [[ $token == kolumn-provider- ]] && continue   # <placeholder>
+        [[ $lower == kolumn-provider- ]] && continue   # <placeholder>
         while [[ $token == *. ]]; do token="${token%.}"; done
-        token="${token%.exe}"
+        for ext in .tar.gz .tgz .zip .exe; do
+            lower=$(tr '[:upper:]' '[:lower:]' <<< "$token")
+            [[ $lower == *"$ext" ]] && token="${token:0:${#token}-${#ext}}"
+        done
+        lower=$(tr '[:upper:]' '[:lower:]' <<< "$token")
+        if [[ $lower =~ $RELEASE_TAIL ]] && [[ -n ${BASH_REMATCH[0]} ]]; then
+            token="${token:0:${#token}-${#BASH_REMATCH[0]}}"
+        fi
         check_name "$f:$line_num" "$token"
-    done < <(grep -noE 'kolumn-provider-[^][:space:]`"'"'"'(),;:<>|*/\\$]*\$?' "$f" 2>/dev/null || true)
+    done < <(grep -noiE 'kolumn-provider-[^][:space:]`"'"'"'(),;:<>|*/\\$]*\$?' "$f" 2>/dev/null || true)
 done
 
 # 4. What README.md requires of provider authors.
