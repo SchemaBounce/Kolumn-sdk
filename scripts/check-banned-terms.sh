@@ -69,11 +69,11 @@ while IFS= read -r file; do
             continue
             ;;
     esac
-    
+
     if [[ -f "$file" ]]; then
         total_files=$((total_files + 1))
         echo -e "${GREEN}Checking file $total_files: $file${NC}"
-        
+
         # Check for banned terms (case insensitive)
         matches=$(banned_lines "$file")
         if [[ -n "$matches" ]]; then
@@ -97,7 +97,7 @@ if [ $violations_found -gt 0 ]; then
     echo
     echo -e "${YELLOW}Please use alternative terms:${NC}"
     echo -e "   - infrastructure-as-code"
-    echo -e "   - IaC" 
+    echo -e "   - IaC"
     echo -e "   - configuration management"
     echo -e "   - provider SDK"
     echo -e "   - HashiCorp Provider SDK (when referencing similar tools)"
