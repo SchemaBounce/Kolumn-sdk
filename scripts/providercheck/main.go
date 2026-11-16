@@ -93,9 +93,38 @@ type listedPackage struct {
 
 type checker struct {
 	fset     *token.FileSet
-	imp      types.ImporterFrom
-	provider *types.Interface
+	lookup   importer.Lookup
+	imp      types.ImporterFrom // shared importer for the schema checks
+	provider *types.Interface   // core.Provider as loaded by imp
 	problems []string
+}
+
+// newImporter returns an importer that reads compiler export data.
+//
+// Export data records every command package under the path "main", so one
+// importer would merge the scopes of all main packages it loads. Each main
+// package therefore gets an importer of its own.
+func (c *checker) newImporter() types.ImporterFrom {
+	return importer.ForCompiler(c.fset, "gc", c.lookup).(types.ImporterFrom)
+}
+
+// loadProvider returns core.Provider as seen by imp. Types from different
+// importers are never identical, so a package is always compared with the
+// core.Provider its own importer loaded.
+func loadProvider(imp types.ImporterFrom) (*types.Interface, error) {
+	core, err := imp.ImportFrom(corePath, ".", 0)
+	if err != nil {
+		return nil, fmt.Errorf("type-checking %s: %w", corePath, err)
+	}
+	obj := core.Scope().Lookup("Provider")
+	if obj == nil {
+		return nil, fmt.Errorf("%s.Provider not found", corePath)
+	}
+	iface, ok := obj.Type().Underlying().(*types.Interface)
+	if !ok {
+		return nil, fmt.Errorf("%s.Provider is not an interface", corePath)
+	}
+	return iface, nil
 }
 
 func main() {
@@ -153,21 +182,11 @@ func checkModule(mode, dir string) ([]string, error) {
 		}
 		return os.Open(file)
 	}
-	c := &checker{fset: fset, imp: importer.ForCompiler(fset, "gc", lookup).(types.ImporterFrom)}
-
-	core, err := c.imp.ImportFrom(corePath, ".", 0)
-	if err != nil {
-		return nil, fmt.Errorf("type-checking %s: %w", corePath, err)
+	c := &checker{fset: fset, lookup: lookup}
+	c.imp = c.newImporter()
+	if c.provider, err = loadProvider(c.imp); err != nil {
+		return nil, err
 	}
-	obj := core.Scope().Lookup("Provider")
-	if obj == nil {
-		return nil, fmt.Errorf("%s.Provider not found", corePath)
-	}
-	iface, ok := obj.Type().Underlying().(*types.Interface)
-	if !ok {
-		return nil, fmt.Errorf("%s.Provider is not an interface", corePath)
-	}
-	c.provider = iface
 
 	switch mode {
 	case "interfaces":
@@ -292,15 +311,15 @@ func (c *checker) checkContract() {
 }
 
 // claimsProvider reports whether a type presents itself as a core.Provider.
-func (c *checker) claimsProvider(mset *types.MethodSet) bool {
-	call := c.provider.Method(indexOf(c.provider, "CallFunction"))
+func claimsProvider(mset *types.MethodSet, provider *types.Interface) bool {
+	call := provider.Method(indexOf(provider, "CallFunction"))
 	if sel := mset.Lookup(nil, "CallFunction"); sel != nil {
 		if types.Identical(sel.Type(), call.Type()) {
 			return true
 		}
 	}
-	for i := 0; i < c.provider.NumMethods(); i++ {
-		if mset.Lookup(nil, c.provider.Method(i).Name()) == nil {
+	for i := 0; i < provider.NumMethods(); i++ {
+		if mset.Lookup(nil, provider.Method(i).Name()) == nil {
 			return false
 		}
 	}
@@ -317,7 +336,12 @@ func indexOf(iface *types.Interface, name string) int {
 }
 
 func (c *checker) checkImplementations(p listedPackage) error {
-	pkg, err := c.imp.ImportFrom(p.ImportPath, p.Dir, 0)
+	imp := c.newImporter()
+	provider, err := loadProvider(imp)
+	if err != nil {
+		return err
+	}
+	pkg, err := imp.ImportFrom(p.ImportPath, p.Dir, 0)
 	if err != nil {
 		return fmt.Errorf("type-checking %s: %w", p.ImportPath, err)
 	}
@@ -335,14 +359,14 @@ func (c *checker) checkImplementations(p listedPackage) error {
 			continue
 		}
 		ptr := types.NewPointer(named)
-		if !c.claimsProvider(types.NewMethodSet(ptr)) {
+		if !claimsProvider(types.NewMethodSet(ptr), provider) {
 			continue
 		}
-		if types.Implements(ptr, c.provider) {
+		if types.Implements(ptr, provider) {
 			fmt.Printf("  ok   %s.%s implements core.Provider\n", p.ImportPath, name)
 			continue
 		}
-		m, wrongType := types.MissingMethod(ptr, c.provider, true)
+		m, wrongType := types.MissingMethod(ptr, provider, true)
 		want := signature(m.Type().(*types.Signature))
 		if wrongType {
 			c.report(tn.Pos(), "%s claims to be a core.Provider but %s has the wrong signature (want %s%s)", name, m.Name(), m.Name(), want)
