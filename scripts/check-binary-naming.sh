@@ -24,10 +24,17 @@
 #      Before the name is checked, these are removed: sentence-ending dots, a
 #      module version (go install .../kolumn-provider-x@latest), a release
 #      archive extension (.zip, .tar.gz, .tgz), a trailing .exe, and a
-#      release tail of a version and/or a known GOOS_GOARCH pair
-#      (kolumn-provider-x_1.0.0_linux_amd64.tar.gz is the valid name
-#      kolumn-provider-x). Other suffixes, such as checksum files
-#      (kolumn-provider-x_1.0.0_checksums.txt), are reported.
+#      release tail: _<os>_<arch> for a known GOOS/GOARCH pair, optionally
+#      after a dotted version (_1.0.0, _v1.2.0-rc1); or, only after an
+#      archive extension, a dotted version alone. So
+#      kolumn-provider-x_1.0.0_linux_amd64.tar.gz and
+#      kolumn-provider-x_1.0.0.zip are the valid name kolumn-provider-x,
+#      while kolumn-provider-x_v2, kolumn-provider-x_2_linux_amd64 and
+#      kolumn-provider-x_1.0.0 (no archive) are reported. Other release
+#      shapes are reported too: checksum files
+#      (kolumn-provider-x_1.0.0_checksums.txt), hyphenated versions
+#      (kolumn-provider-x-1.0.0.tar.gz, which reads as a name) and packages
+#      such as .deb.
 #   4. README.md must still state the rule, and its `go mod init` example
 #      must use a valid kolumn-provider-{name} module.
 #
@@ -49,10 +56,12 @@ readonly REQUIRED_PATTERN='^kolumn-provider-[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
 readonly PLACEHOLDER='kolumn-provider-{name}'
 
 # A release tail after the name: _<version>, _<os>_<arch>, or both, as in
-# kolumn-provider-x_1.0.0_linux_amd64. Matched against the lower-cased token.
+# kolumn-provider-x_1.0.0_linux_amd64. The version must be dotted. Matched
+# against the lower-cased token; group 1 is the version, group 4 the
+# _<os>_<arch> pair.
 readonly RELEASE_OS='linux|darwin|windows|freebsd|openbsd|netbsd|dragonfly|solaris|illumos|aix|android|ios|plan9|js|wasip1'
 readonly RELEASE_ARCH='amd64|arm64|386|arm|armv5|armv6|armv7|ppc64|ppc64le|mips|mipsle|mips64|mips64le|riscv64|s390x|loong64|wasm|x86_64|i386|all'
-readonly RELEASE_TAIL="(_v?[0-9]+(\\.[0-9]+)*([-+][0-9a-z.+-]*)?)?(_($RELEASE_OS)_($RELEASE_ARCH))?\$"
+readonly RELEASE_TAIL="(_v?[0-9]+(\\.[0-9]+)+([-+][0-9a-z.+-]*)?)?(_($RELEASE_OS)_($RELEASE_ARCH))?\$"
 
 violations_found=0
 names_checked=0
@@ -121,12 +130,19 @@ for f in "${doc_and_build_files[@]}"; do
         [[ $token == *'{'* ]] && continue   # {placeholder}
         [[ $lower == kolumn-provider- ]] && continue   # <placeholder>
         while [[ $token == *. ]]; do token="${token%.}"; done
+        archive=false
         for ext in .tar.gz .tgz .zip .exe; do
             lower=$(tr '[:upper:]' '[:lower:]' <<< "$token")
-            [[ $lower == *"$ext" ]] && token="${token:0:${#token}-${#ext}}"
+            if [[ $lower == *"$ext" ]]; then
+                token="${token:0:${#token}-${#ext}}"
+                [[ $ext != .exe ]] && archive=true
+            fi
         done
+        # Strip a release tail only when it names a platform, or when it
+        # followed an archive extension: a bare _v2 is part of the name.
         lower=$(tr '[:upper:]' '[:lower:]' <<< "$token")
-        if [[ $lower =~ $RELEASE_TAIL ]] && [[ -n ${BASH_REMATCH[0]} ]]; then
+        if [[ $lower =~ $RELEASE_TAIL ]] && [[ -n ${BASH_REMATCH[0]} ]] &&
+            { [[ -n ${BASH_REMATCH[4]} ]] || $archive; }; then
             token="${token:0:${#token}-${#BASH_REMATCH[0]}}"
         fi
         check_name "$f:$line_num" "$token"
