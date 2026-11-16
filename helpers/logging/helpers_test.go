@@ -386,7 +386,6 @@ func TestLogProviderOperation(t *testing.T) {
 		time.Sleep(10 * time.Millisecond) // Simulate work
 		return nil
 	})
-
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}

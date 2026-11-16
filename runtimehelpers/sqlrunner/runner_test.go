@@ -191,10 +191,12 @@ func (c *stubConn) QueryContext(ctx context.Context, query string, args []driver
 func (c *stubConn) Ping(ctx context.Context) error { return nil }
 
 // Ensure interfaces satisfied
-var _ driver.ExecerContext = (*stubConn)(nil)
-var _ driver.QueryerContext = (*stubConn)(nil)
-var _ driver.ConnBeginTx = (*stubConn)(nil)
-var _ driver.Pinger = (*stubConn)(nil)
+var (
+	_ driver.ExecerContext  = (*stubConn)(nil)
+	_ driver.QueryerContext = (*stubConn)(nil)
+	_ driver.ConnBeginTx    = (*stubConn)(nil)
+	_ driver.Pinger         = (*stubConn)(nil)
+)
 
 type stubTx struct {
 	state *stubState

@@ -349,7 +349,6 @@ func validateHandlerRouting(t *testing.T, provider SchemaProvider, schema *Provi
 
 			// Call the function - routing should work even if validation fails
 			_, err = provider.CallFunction(ctx, functionName, inputJSON)
-
 			// Check for routing errors (should not occur)
 			if err != nil {
 				errorMsg := err.Error()

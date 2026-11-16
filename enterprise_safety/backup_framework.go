@@ -566,7 +566,7 @@ func (f *BackupIntegrityFramework) validateBackup(backup *BackupObject) {
 }
 
 func (f *BackupIntegrityFramework) saveBackupToDisk(backup *BackupObject) error {
-	if err := os.MkdirAll(f.BackupDirectory, 0755); err != nil {
+	if err := os.MkdirAll(f.BackupDirectory, 0o755); err != nil {
 		return err
 	}
 
@@ -578,7 +578,7 @@ func (f *BackupIntegrityFramework) saveBackupToDisk(backup *BackupObject) error 
 		return err
 	}
 
-	return os.WriteFile(filepath, data, 0644)
+	return os.WriteFile(filepath, data, 0o644)
 }
 
 func (f *BackupIntegrityFramework) loadAllBackups() ([]*BackupObject, error) {

@@ -562,7 +562,6 @@ func (e *DocumentationExtractor) loadDocumentationFiles() error {
 
 		return nil
 	})
-
 	if err != nil {
 		return fmt.Errorf("failed to walk documentation directory: %w", err)
 	}
@@ -614,7 +613,6 @@ func (e *DocumentationExtractor) loadExamples() error {
 
 		return nil
 	})
-
 	if err != nil {
 		return fmt.Errorf("failed to walk examples directory: %w", err)
 	}
@@ -739,7 +737,7 @@ func (e *DocumentationExtractor) generateOutput() error {
 	}
 
 	// Write to file
-	if err := os.WriteFile(e.config.OutputFile, finalData, 0644); err != nil {
+	if err := os.WriteFile(e.config.OutputFile, finalData, 0o644); err != nil {
 		return fmt.Errorf("failed to write output file: %w", err)
 	}
 

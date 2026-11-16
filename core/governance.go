@@ -335,7 +335,6 @@ func (gh *GovernanceHelper) ExtractGovernanceRequirements(
 	config map[string]interface{},
 	governanceCtx *GovernanceContext,
 ) (*ResourceGovernanceRequirements, error) {
-
 	requirements := &ResourceGovernanceRequirements{
 		ResourceType:       resourceType,
 		EncryptionRequired: false,
@@ -397,7 +396,6 @@ func (gh *GovernanceHelper) extractColumnRequirements(
 	governanceCtx *GovernanceContext,
 	requirements *ResourceGovernanceRequirements,
 ) error {
-
 	requirements.ColumnRequirements = make(map[string]*ColumnGovernanceRequirements)
 
 	// Parse columns (this would be more sophisticated in a real implementation)
@@ -437,7 +435,6 @@ func (gh *GovernanceHelper) extractClassificationRequirements(
 	governanceCtx *GovernanceContext,
 	requirements *ResourceGovernanceRequirements,
 ) error {
-
 	if classArray, ok := classifications.([]interface{}); ok {
 		for _, c := range classArray {
 			if cStr, ok := c.(string); ok {
@@ -466,7 +463,6 @@ func (gh *GovernanceHelper) extractProviderSpecificRules(
 	governanceCtx *GovernanceContext,
 	requirements *ResourceGovernanceRequirements,
 ) error {
-
 	// Add provider-specific rules based on governance context
 	// This would be customized for each provider type
 
@@ -491,7 +487,6 @@ func (gh *GovernanceHelper) ValidateComplianceFramework(
 	config map[string]interface{},
 	governanceCtx *GovernanceContext,
 ) (*ComplianceValidationResult, error) {
-
 	result := &ComplianceValidationResult{
 		Framework:   framework,
 		IsCompliant: true,
@@ -592,7 +587,6 @@ func (gh *GovernanceHelper) ApplyEncryptionRules(
 	config map[string]interface{},
 	requirements *ResourceGovernanceRequirements,
 ) (map[string]interface{}, error) {
-
 	if !requirements.EncryptionRequired {
 		return config, nil
 	}
@@ -623,7 +617,6 @@ func (gh *GovernanceHelper) applyColumnEncryption(
 	config map[string]interface{},
 	columnRequirements map[string]*ColumnGovernanceRequirements,
 ) error {
-
 	// Apply column-level encryption based on requirements
 	// Implementation would be provider-specific
 
@@ -635,7 +628,6 @@ func (gh *GovernanceHelper) ApplyAccessControls(
 	config map[string]interface{},
 	accessControls []AccessControl,
 ) (map[string]interface{}, error) {
-
 	// Apply provider-specific access control rules
 	// Implementation would be provider-specific
 
@@ -650,7 +642,6 @@ func (gh *GovernanceHelper) GenerateAuditEvent(
 	outcome string,
 	details map[string]interface{},
 ) *AuditEvent {
-
 	return &AuditEvent{
 		EventID:      generateEventID(),
 		EventType:    "governance_enforcement",
