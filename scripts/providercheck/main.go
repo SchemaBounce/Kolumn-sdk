@@ -18,7 +18,9 @@
 //     signature: the unified dispatch entry point), at least three of the
 //     four method names under any signatures, or two of them with its
 //     Configure or Schema matching core.Provider's exact signature. (Close()
-//     error alone is too common to count.)
+//     error alone is too common to count.) The three-name rule can flag a
+//     non-provider such as a client with Configure(dsn string) error,
+//     Schema() string and Close() error; rename such a method.
 //   - Exception: a type the code explicitly declares as a schema-testing
 //     provider with `var _ sdktesting.SchemaProvider = (*T)(nil)`. That
 //     interface's Schema() returns *sdktesting.ProviderSchema, so no type can
@@ -34,14 +36,16 @@
 //     (`return &core.Schema{...}`) must set Name and Version
 //     (helpers/validation.ValidateSchema rejects a schema without them).
 //     Literals stored in a variable are not checked, since fields can be
-//     set after construction, and neither is a return that also returns a
-//     non-nil error (`return &core.Schema{}, err`).
+//     set after construction, and neither is a return that also returns an
+//     error value other than the literal nil (`return &core.Schema{}, err`;
+//     the type is checked, not the value, so a nil error variable also
+//     skips the check).
 //   - Every function name given to a SupportedFunctions field must be one
 //     core.UnifiedDispatcher.Dispatch accepts (read from its allowedFunctions
 //     map in the core sources). Names are followed through string and
 //     slice literals, constants, append calls, and local or package string
 //     and slice variables in the same package; values produced by other
-//     function calls are not followed.
+//     function calls, and range loop variables, are not followed.
 //
 // Only a package's non-test files are checked: _test.go files are neither
 // type-checked nor searched.
