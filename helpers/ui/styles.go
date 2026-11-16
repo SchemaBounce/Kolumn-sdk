@@ -91,8 +91,11 @@ const (
 	ResCluster        = "CLUSTER"
 )
 
+// DefaultProviderName is the provider name used in message prefixes when no
+// provider is given.
 const DefaultProviderName = "KOLUMN"
 
+// ColorScheme maps message roles to ANSI color codes.
 type ColorScheme struct {
 	Success   string
 	Error     string
@@ -105,6 +108,7 @@ type ColorScheme struct {
 	Secondary string
 }
 
+// DefaultColorScheme is the color scheme used when colors are enabled.
 var DefaultColorScheme = ColorScheme{
 	Success:   Green,
 	Warning:   Yellow,
@@ -117,8 +121,10 @@ var DefaultColorScheme = ColorScheme{
 	Secondary: Cyan,
 }
 
+// NoColorScheme leaves every role uncolored.
 var NoColorScheme = ColorScheme{}
 
+// ProgressStyle sets the characters, width and color of a ProgressBar.
 type ProgressStyle struct {
 	StartChar    string
 	ProgressChar string
@@ -128,6 +134,7 @@ type ProgressStyle struct {
 	Color        string
 }
 
+// DefaultProgressStyle is a 30-character bar drawn in bright blue.
 var DefaultProgressStyle = ProgressStyle{
 	StartChar:    "[",
 	ProgressChar: "█",
@@ -137,8 +144,11 @@ var DefaultProgressStyle = ProgressStyle{
 	Color:        BrightBlue,
 }
 
+// SpinnerFrames are the frames of a braille spinner animation, in order.
 var SpinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
+// MessageStyle describes how FormatMessageWithStyle renders a message's
+// [PROVIDER-OPERATION] prefix.
 type MessageStyle struct {
 	Prefix       string
 	Color        string
@@ -161,6 +171,7 @@ var (
 	ValidateStyle = MessageStyle{Prefix: "VALIDATE", Color: BrightBlue, SchemaPrefix: BuildProviderPrefix(DefaultProviderName, OpValidate), Bold: true}
 )
 
+// StyleOptions turns colors, prefixes, bold text and compact spacing on or off.
 type StyleOptions struct {
 	UseColors   bool
 	UsePrefixes bool
@@ -168,6 +179,8 @@ type StyleOptions struct {
 	Compact     bool
 }
 
+// DefaultStyleOptions enables colors, prefixes and bold text, without
+// compact spacing.
 var DefaultStyleOptions = StyleOptions{
 	UseColors:   true,
 	UsePrefixes: true,
@@ -175,6 +188,8 @@ var DefaultStyleOptions = StyleOptions{
 	Compact:     false,
 }
 
+// GetStyleOptions returns DefaultStyleOptions adjusted for the environment:
+// colors are off on Windows, and colors and bold are off when NO_COLOR is set.
 func GetStyleOptions() StyleOptions {
 	opts := DefaultStyleOptions
 	if runtime.GOOS == "windows" {
@@ -187,6 +202,8 @@ func GetStyleOptions() StyleOptions {
 	return opts
 }
 
+// Colorize wraps text in the given color code and a reset, when use is true
+// and color is not empty.
 func Colorize(text, color string, use bool) string {
 	if !use || color == "" {
 		return text
@@ -194,6 +211,7 @@ func Colorize(text, color string, use bool) string {
 	return color + text + Reset
 }
 
+// MakeBold wraps text in bold and a reset when use is true.
 func MakeBold(text string, use bool) string {
 	if !use {
 		return text
@@ -201,6 +219,7 @@ func MakeBold(text string, use bool) string {
 	return Bold + text + Reset
 }
 
+// MakeDim wraps text in dim and a reset when use is true.
 func MakeDim(text string, use bool) string {
 	if !use {
 		return text
@@ -208,6 +227,7 @@ func MakeDim(text string, use bool) string {
 	return Dim + text + Reset
 }
 
+// MakeUnderline wraps text in underline and a reset when use is true.
 func MakeUnderline(text string, use bool) string {
 	if !use {
 		return text
@@ -215,6 +235,8 @@ func MakeUnderline(text string, use bool) string {
 	return Underline + text + Reset
 }
 
+// FormatMessageWithStyle prefixes message with the style's [SchemaPrefix],
+// colored, bold or underlined as the style and options allow.
 func FormatMessageWithStyle(message string, style MessageStyle, options StyleOptions) string {
 	var parts []string
 	if options.UsePrefixes && style.SchemaPrefix != "" {
@@ -238,6 +260,8 @@ func FormatMessageWithStyle(message string, style MessageStyle, options StyleOpt
 	return strings.Join(parts, sep)
 }
 
+// ProgressBar renders current out of total as a bar in the given style,
+// followed by the percentage. It returns "" when total is not positive.
 func ProgressBar(current, total int, style ProgressStyle, useColors bool) string {
 	if total <= 0 {
 		return ""
@@ -260,10 +284,12 @@ func ProgressBar(current, total int, style ProgressStyle, useColors bool) string
 	return fmt.Sprintf("%s %3.0f%%", result, percentage*100)
 }
 
+// FormatDuration returns duration unchanged.
 func FormatDuration(duration string) string {
 	return duration
 }
 
+// Indent indents each non-empty line of text by two spaces per level.
 func Indent(text string, level int) string {
 	indent := strings.Repeat("  ", level)
 	lines := strings.Split(text, "\n")
@@ -275,6 +301,7 @@ func Indent(text string, level int) string {
 	return strings.Join(lines, "\n")
 }
 
+// Box draws a single-line box around text. options is currently unused.
 func Box(text string, options StyleOptions) string {
 	lines := strings.Split(text, "\n")
 	max := 0
@@ -293,6 +320,8 @@ func Box(text string, options StyleOptions) string {
 	return b.String()
 }
 
+// Table renders headers and rows as a box-drawn table with columns sized to
+// fit. It returns "" when there are no headers or no rows.
 func Table(headers []string, rows [][]string, options StyleOptions) string {
 	if len(headers) == 0 || len(rows) == 0 {
 		return ""
@@ -338,10 +367,14 @@ func Table(headers []string, rows [][]string, options StyleOptions) string {
 	return out.String()
 }
 
+// BuildProviderPrefix returns the PROVIDER-OPERATION prefix, e.g.
+// "KOLUMN-APPLY".
 func BuildProviderPrefix(provider, operation string) string {
 	return NormalizeProviderName(provider) + "-" + operation
 }
 
+// BuildProviderPrefixWithSchema builds the prefix from a schema map's
+// display_name or name, falling back to DefaultProviderName.
 func BuildProviderPrefixWithSchema(schema interface{}, operation string) string {
 	if schemaMap, ok := schema.(map[string]interface{}); ok {
 		if displayName, ok := schemaMap["display_name"].(string); ok && displayName != "" {
@@ -354,10 +387,14 @@ func BuildProviderPrefixWithSchema(schema interface{}, operation string) string 
 	return BuildProviderPrefix(DefaultProviderName, operation)
 }
 
+// BuildResourcePrefix returns the PROVIDER-RESOURCE prefix for a resource
+// type, e.g. "KOLUMN-TABLE".
 func BuildResourcePrefix(provider, resourceType string) string {
 	return NormalizeProviderName(provider) + "-" + GetResourceTypeName(resourceType)
 }
 
+// NormalizeProviderName upper-cases provider, or returns DefaultProviderName
+// when it is empty.
 func NormalizeProviderName(provider string) string {
 	if provider == "" {
 		return DefaultProviderName
@@ -365,6 +402,8 @@ func NormalizeProviderName(provider string) string {
 	return strings.ToUpper(provider)
 }
 
+// GetResourceTypeName maps a resource type to one of the Res* identifiers by
+// keyword, defaulting to ResResource.
 func GetResourceTypeName(resourceType string) string {
 	r := strings.ToLower(resourceType)
 	switch {
@@ -405,6 +444,8 @@ func GetResourceTypeName(resourceType string) string {
 	}
 }
 
+// GetOperationType maps an operation or action name to one of the Op*
+// identifiers, defaulting to OpNext.
 func GetOperationType(operation string) string {
 	switch strings.ToLower(operation) {
 	case "create", "creating":
@@ -440,10 +481,13 @@ func GetOperationType(operation string) string {
 	}
 }
 
+// OperationPrefix returns the KOLUMN-OPERATION prefix for an operation name.
 func OperationPrefix(operation string) string {
 	return BuildProviderPrefix(DefaultProviderName, GetOperationType(operation))
 }
 
+// FormatResourceMessage formats "[KOLUMN-RESOURCE] type.name: action" for a
+// resource.
 func FormatResourceMessage(resourceType, name, action string, options StyleOptions) string {
 	var parts []string
 	if options.UsePrefixes {
@@ -469,6 +513,8 @@ func FormatResourceMessage(resourceType, name, action string, options StyleOptio
 	return strings.Join(parts, sep)
 }
 
+// FormatProviderMessage formats "[KOLUMN-PROVIDER] provider.type: action" for
+// a provider.
 func FormatProviderMessage(providerType, action string, options StyleOptions) string {
 	var parts []string
 	if options.UsePrefixes {
@@ -494,10 +540,13 @@ func FormatProviderMessage(providerType, action string, options StyleOptions) st
 	return strings.Join(parts, sep)
 }
 
+// ResourceTypePrefix returns the KOLUMN-RESOURCE prefix for a resource type.
 func ResourceTypePrefix(resourceType string) string {
 	return BuildResourcePrefix(DefaultProviderName, resourceType)
 }
 
+// StyleForSeverity returns the message style for a log severity, defaulting
+// to InfoStyle.
 func StyleForSeverity(severity string) MessageStyle {
 	switch strings.ToUpper(severity) {
 	case "ERROR":
@@ -513,6 +562,8 @@ func StyleForSeverity(severity string) MessageStyle {
 	}
 }
 
+// OperationForSeverity returns the Op* identifier for a log severity,
+// defaulting to OpInfo.
 func OperationForSeverity(severity string) string {
 	switch strings.ToUpper(severity) {
 	case "ERROR":
@@ -528,6 +579,9 @@ func OperationForSeverity(severity string) string {
 	}
 }
 
+// FormatComponentTag returns the component name upper-cased and padded or
+// cut to 18 characters, followed by a separator. It returns "" for an empty
+// component.
 func FormatComponentTag(component string, options StyleOptions) string {
 	component = strings.TrimSpace(component)
 	if component == "" {
@@ -544,6 +598,8 @@ func FormatComponentTag(component string, options StyleOptions) string {
 	return label
 }
 
+// FormatLogLine formats a log message with its severity prefix and optional
+// component tag.
 func FormatLogLine(severity string, component string, message string, options StyleOptions) string {
 	style := StyleForSeverity(severity)
 	style.SchemaPrefix = BuildProviderPrefix(DefaultProviderName, OperationForSeverity(severity))
@@ -788,12 +844,16 @@ func visibleLength(s string) int {
 
 // FormatWrappedBlock formats a block of text with a decorative border.
 // Example output:
-// ╷
-// │ Error: Something went wrong
-// │
-// │ This is a longer explanation that will be wrapped
-// │ to fit within the terminal width nicely.
-// ╵
+//
+//	╷
+//	│ Error: Something went wrong
+//	│
+//	│ This is a longer explanation that will be wrapped
+//	│ to fit within the terminal width nicely.
+//	╵
+//
+// blockType "error", "warning" or "success" picks the colors; any other value
+// uses the default blue and gray.
 func FormatWrappedBlock(title, body string, blockType string, options StyleOptions) string {
 	width := GetTerminalWidth() - 4 // Account for "│ " prefix and margin
 

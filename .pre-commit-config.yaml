@@ -19,7 +19,7 @@ repos:
         name: Validate TOML files
       - id: check-xml
         name: Validate XML files
-      
+
       # Security and safety checks
       - id: detect-private-key
         name: Detect private keys
@@ -32,7 +32,7 @@ repos:
         name: Check for merge conflicts
       - id: check-symlinks
         name: Check for broken symlinks
-      
+
       # Code quality
       - id: mixed-line-ending
         name: Check for mixed line endings
@@ -49,37 +49,15 @@ repos:
         name: Format Go code (gofmt)
       - id: go-imports
         name: Organize Go imports (goimports)
-      - id: go-vet-mod
-        name: Static analysis (go vet)
       - id: go-mod-tidy
         name: Tidy go.mod (go mod tidy)
       - id: go-unit-tests
         name: Run Go unit tests
         args: ['-v', './...']
-      - id: go-build-mod
-        name: Build Go modules
       - id: go-critic
         name: Go code review (go-critic)
-      - id: golangci-lint-mod
+      - id: golangci-lint
         name: Comprehensive Go linting (golangci-lint)
-
-  # Additional Go formatting with gofumpt (stricter than gofmt)
-  - repo: https://github.com/heschik/pre-commit-go-gofumpt
-    rev: v1.0.0
-    hooks:
-      - id: gofumpt
-        name: Format Go code (gofumpt - stricter)
-
-  # Security scanning
-  - repo: https://github.com/securecodewarrior/github-action-add-sarif
-    rev: v1.1.0
-    hooks:
-      - id: gosec
-        name: Go security checker (gosec)
-        language: golang
-        entry: gosec
-        args: ['-fmt=sarif', '-out=gosec-results.sarif', './...']
-        pass_filenames: false
 
   # Detect secrets and credentials
   - repo: https://github.com/Yelp/detect-secrets
@@ -93,13 +71,60 @@ repos:
   # Custom hooks for SDK-specific requirements
   - repo: local
     hooks:
+      # go vet over the root module. dnephin/pre-commit-golang v0.5.1 (its
+      # latest tag) has no go-vet-mod, and its go-vet hook vets per changed
+      # directory, which breaks on the nested examples module. The examples
+      # module is vetted by validate-examples below.
+      - id: go-vet
+        name: Static analysis (go vet)
+        entry: go vet ./...
+        language: system
+        files: '\.go$|(^|/)go\.(mod|sum)$'
+        pass_filenames: false
+
+      # go build over the root module. v0.5.1 has no go-build-mod, and its
+      # go-build hook passes an explicit package list, which errors on
+      # test-only packages such as templates/.
+      - id: go-build
+        name: Build Go modules
+        entry: go build ./...
+        language: system
+        files: '\.go$|(^|/)go\.(mod|sum)$'
+        pass_filenames: false
+
+      # gofumpt (stricter than gofmt). The previously pinned
+      # heschik/pre-commit-go-gofumpt repository does not exist, so this is a
+      # local hook running `gofumpt -l .`; it fails when gofumpt lists files.
+      # Prints SKIPPED (and passes) only when gofumpt is not installed.
+      - id: gofumpt
+        name: Format Go code (gofumpt - stricter)
+        entry: scripts/check-gofumpt.sh
+        language: script
+        files: '\.go$|(^|/)go\.mod$|^scripts/check-gofumpt\.sh$'
+        pass_filenames: false
+        verbose: true
+
+      # gosec security scanner, the command `make security` runs (but failing
+      # on findings, which `make security` does not). The previously
+      # pinned securecodewarrior/github-action-add-sarif repository does not
+      # exist. Prints SKIPPED (and passes) only when gosec is not installed.
+      - id: gosec
+        name: Go security checker (gosec)
+        entry: scripts/check-gosec.sh
+        language: script
+        files: '\.go$|(^|/)go\.(mod|sum)$|^scripts/check-gosec\.sh$'
+        pass_filenames: false
+        verbose: true
+
       # Banned terms detection (terraform references)
       - id: banned-terms
         name: Check for banned terms (terraform references)
         entry: scripts/check-banned-terms.sh
         language: script
-        files: \.(go|md|txt|yaml|yml|json)$
-        
+        # The script scans every .go and .md file and ignores its arguments.
+        files: '\.(go|md)$|^scripts/check-banned-terms\.sh$'
+        pass_filenames: false
+
       # Documentation validation
       - id: go-doc-check
         name: Check Go documentation coverage
@@ -107,36 +132,43 @@ repos:
         language: script
         files: \.go$
         pass_filenames: true
-        
-      # Example code validation
+
+      # Example code validation. The nested example module builds against
+      # this checkout of the SDK (replace directive), so any SDK Go or
+      # go.mod/go.sum change can break it, not only edits under examples/.
+      # Edits to the script itself also re-run it.
       - id: validate-examples
-        name: Validate example code compiles
+        name: Vet and test examples
         entry: scripts/validate-examples.sh
         language: script
-        files: examples/.*\.go$
+        files: '\.go$|(^|/)go\.(mod|sum)$|^scripts/validate-examples\.sh$'
         pass_filenames: false
-        
-      # Interface compliance check
+
+      # Interface compliance check (type-checks every module against
+      # core.Provider; see scripts/providercheck/main.go)
       - id: interface-compliance
         name: Check Provider interface compliance
         entry: scripts/check-interface-compliance.sh
         language: script
-        files: \.go$
+        files: '\.go$|(^|/)go\.(mod|sum)$|^scripts/check-interface-compliance\.sh$'
         pass_filenames: false
-        
-      # Binary naming validation
+
+      # Binary naming validation. The check reads go.mod files, docs and
+      # build files (not Go sources) and always scans the whole repository.
       - id: binary-naming
         name: Validate provider binary naming convention
         entry: scripts/check-binary-naming.sh
         language: script
-        files: examples/.*\.go$|cmd/.*\.go$
-        
-      # Schema validation
+        files: '(^|/)go\.mod$|(^|/)Makefile$|\.(md|mk|sh|ya?ml)$'
+        pass_filenames: false
+
+      # Schema validation (type-checks every module; see
+      # scripts/providercheck/main.go)
       - id: schema-validation
         name: Validate provider schemas
         entry: scripts/validate-schemas.sh
         language: script
-        files: \.go$
+        files: '\.go$|(^|/)go\.(mod|sum)$|^scripts/validate-schemas\.sh$'
         pass_filenames: false
 
   # Markdown linting

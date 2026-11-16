@@ -692,7 +692,9 @@ package main
 
 import (
 	"context"
-	"github.com/schemabounce/kolumn-sdk/core"
+	"encoding/json"
+
+	"github.com/schemabounce/kolumn/sdk/core"
 )
 
 type PostgreSQLProvider struct {
