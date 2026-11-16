@@ -32,22 +32,28 @@
 
 ### 1.1 Purpose
 
-This specification defines the complete requirements for implementing Kolumn database providers. All providers MUST conform to this specification to ensure consistent behavior, enterprise-grade reliability, and seamless integration with the Kolumn CLI and SchemaBounce platform.
+This specification defines the complete requirements for implementing Kolumn database providers. All
+providers MUST conform to this specification to ensure consistent behavior, enterprise-grade
+reliability, and seamless integration with the Kolumn CLI and SchemaBounce platform.
 
 ### 1.2 Scope
 
 This specification applies to ALL Kolumn database providers including:
 
 **SQL Relational Databases**:
+
 - PostgreSQL, MySQL, MSSQL, SQLite, CockroachDB
 
 **Analytical Warehouses**:
+
 - Snowflake, BigQuery, Redshift, Databricks, DuckDB
 
 **NoSQL Databases**:
+
 - MongoDB, DynamoDB
 
 **Time-Series Databases**:
+
 - InfluxDB
 
 ### 1.3 Target Audience
@@ -74,7 +80,8 @@ This specification applies to ALL Kolumn database providers including:
 
 ### 2.1 Overview
 
-Every Kolumn provider MUST implement the following 4-method interface. This is enforced by the SDK and required for RPC communication with the Kolumn CLI.
+Every Kolumn provider MUST implement the following 4-method interface. This is enforced by the SDK
+and required for RPC communication with the Kolumn CLI.
 
 ```go
 type Provider interface {
@@ -97,11 +104,13 @@ type Provider interface {
 **Purpose**: Initialize the provider with database connection details and settings.
 
 **Signature**:
+
 ```go
 Configure(ctx context.Context, config map[string]interface{}) error
 ```
 
 **Requirements**:
+
 - MUST validate all required configuration fields
 - MUST establish database connection
 - MUST NOT store plain-text passwords in memory longer than necessary
@@ -109,6 +118,7 @@ Configure(ctx context.Context, config map[string]interface{}) error
 - MUST support timeout from context
 
 **Configuration Fields** (minimum required):
+
 ```go
 type ProviderConfiguration struct {
     // Connection settings
@@ -127,6 +137,7 @@ type ProviderConfiguration struct {
 ```
 
 **Example Implementation**:
+
 ```go
 func (p *Provider) Configure(ctx context.Context, config map[string]interface{}) error {
     // Parse configuration
@@ -162,17 +173,20 @@ func (p *Provider) Configure(ctx context.Context, config map[string]interface{})
 **Purpose**: Return the provider's complete resource schema for validation and documentation.
 
 **Signature**:
+
 ```go
 Schema() (*rpc.ProviderSchema, error)
 ```
 
 **Requirements**:
+
 - MUST return all supported resource types
 - MUST include configuration schema for each resource type
 - MUST include state schema for each resource type
 - MUST be consistent with registered handlers
 
 **Example Implementation**:
+
 ```go
 func (p *Provider) Schema() (*rpc.ProviderSchema, error) {
     return p.unifiedDispatcher.BuildCompatibleSchema(
@@ -189,11 +203,13 @@ func (p *Provider) Schema() (*rpc.ProviderSchema, error) {
 **Purpose**: Route all operations to appropriate handlers.
 
 **Signature**:
+
 ```go
 CallFunction(ctx context.Context, function string, input []byte) ([]byte, error)
 ```
 
 **Requirements**:
+
 - MUST route all Tier 1 functions (see Section 3)
 - MUST route all applicable Tier 2 functions
 - MUST route all Tier 3 migration functions
@@ -202,6 +218,7 @@ CallFunction(ctx context.Context, function string, input []byte) ([]byte, error)
 - MUST propagate context for cancellation and timeouts
 
 **Required Function Routing** (minimum):
+
 ```go
 func (p *Provider) CallFunction(ctx context.Context, function string, input []byte) ([]byte, error) {
     switch function {
@@ -262,17 +279,20 @@ func (p *Provider) CallFunction(ctx context.Context, function string, input []by
 **Purpose**: Clean up provider resources and close connections.
 
 **Signature**:
+
 ```go
 Close() error
 ```
 
 **Requirements**:
+
 - MUST close database connections
 - MUST release connection pool resources
 - MUST clear sensitive data from memory
 - SHOULD be idempotent (safe to call multiple times)
 
 **Example Implementation**:
+
 ```go
 func (p *Provider) Close() error {
     if p.db != nil {
@@ -323,7 +343,10 @@ Every provider MUST implement these 11 functions:
 | `Ping` | Health check connection | PingRequest | PingResponse |
 | `Version` | Return provider version | VersionRequest | VersionResponse |
 
-**Dependency Tree Requirement**: The `Plan` and `Apply` functions MUST implement dependency tree analysis. Resources MUST be executed in dependency order (e.g., schemas before tables, tables before foreign keys). The `PlanResponse` MUST include an `execution_order` field, and `Apply` MUST execute resources in that order.
+**Dependency Tree Requirement**: The `Plan` and `Apply` functions MUST implement dependency tree
+analysis. Resources MUST be executed in dependency order (e.g., schemas before tables, tables before
+foreign keys). The `PlanResponse` MUST include an `execution_order` field, and `Apply` MUST execute
+resources in that order.
 
 ### 3.3 Tier 2 - Conditional Functions
 
@@ -358,12 +381,14 @@ Required for: PostgreSQL, MySQL, MSSQL, SQLite, CockroachDB, Snowflake, BigQuery
 | `GetTypeConversion` | Assess type conversion risk and generate ALTER SQL | TypeConversionRequest | TypeConversionResponse |
 
 **Purpose**: When Kolumn detects a column type change (via drift detection or plan), it calls the provider to:
+
 1. Assess the risk level of the conversion (safe/risky/dangerous)
 2. Generate provider-specific ALTER COLUMN syntax
 3. Generate USING clause (if supported, e.g., PostgreSQL)
 4. Recommend migration for dangerous conversions
 
 **Why Provider-Specific**: Each database has different:
+
 - Type systems and names (VARCHAR vs NVARCHAR vs STRING)
 - ALTER syntax (PostgreSQL: `ALTER COLUMN`, MySQL: `MODIFY COLUMN`)
 - USING clause support (PostgreSQL only)
@@ -382,6 +407,7 @@ Every provider MUST implement these migration functions:
 ### 3.5 Function Implementation Examples
 
 #### CreateResource
+
 ```go
 func (p *Provider) handleCreateResource(ctx context.Context, input []byte) ([]byte, error) {
     var req rpc.CreateResourceRequest
@@ -410,6 +436,7 @@ func (p *Provider) handleCreateResource(ctx context.Context, input []byte) ([]by
 ```
 
 #### Plan
+
 ```go
 func (p *Provider) handlePlan(ctx context.Context, input []byte) ([]byte, error) {
     var req rpc.PlanRequest
@@ -447,6 +474,7 @@ func (p *Provider) handlePlan(ctx context.Context, input []byte) ([]byte, error)
 ```
 
 #### Apply
+
 ```go
 func (p *Provider) handleApply(ctx context.Context, input []byte) ([]byte, error) {
     // CRITICAL: Use same request type as Plan
@@ -571,7 +599,10 @@ func (p *Provider) handleOutboxHealthMetrics(ctx context.Context, input []byte) 
 
 ### 5.1 Overview
 
-Kolumn providers support **data resource types** for seeding, inserting, and managing data within database objects. These resources enable declarative data management alongside schema management, with automatic dependency detection ensuring data operations execute after their target resources are created.
+Kolumn providers support **data resource types** for seeding, inserting, and managing data within
+database objects. These resources enable declarative data management alongside schema management,
+with automatic dependency detection ensuring data operations execute after their target resources
+are created.
 
 ### 5.2 Resource Type Naming Convention
 
@@ -619,11 +650,14 @@ Data resources follow a consistent naming pattern:
 
 ### 5.4 Automatic Dependency Detection
 
-**CRITICAL**: The Kolumn CLI automatically detects dependencies between data resources and their target resources. This ensures proper execution ordering without requiring explicit `depends_on` declarations.
+**CRITICAL**: The Kolumn CLI automatically detects dependencies between data resources and their
+target resources. This ensures proper execution ordering without requiring explicit `depends_on`
+declarations.
 
 #### How It Works
 
-1. **Configuration Parsing**: When a data resource is parsed, the CLI extracts the target attribute (`table`, `collection`, or `bucket`)
+1. **Configuration Parsing**: When a data resource is parsed, the CLI extracts the target attribute
+   (`table`, `collection`, or `bucket`)
 2. **Target Resolution**: The CLI searches for a matching target resource in the same schema/namespace
 3. **Dependency Injection**: An implicit dependency is added to the resource execution context
 4. **Phase Ordering**: Resources are organized into execution phases based on dependencies
@@ -656,7 +690,8 @@ create "postgres_data" "user_seeds" {
 ```
 
 **Execution Output**:
-```
+
+```text
 Execution order preview (2 phases, 2 resources):
   Phase 1 – 1 resource(s)
     - postgres_table.users (provider: postgres.main)
@@ -696,6 +731,7 @@ create "postgres_data" "products" {
 #### NoSQL Provider Examples
 
 **MongoDB**:
+
 ```hcl
 create "mongodb_insert" "users" {
   database   = "myapp"
@@ -709,6 +745,7 @@ create "mongodb_insert" "users" {
 ```
 
 **DynamoDB**:
+
 ```hcl
 create "dynamodb_insert" "orders" {
   table = "orders"  # ← Target: dynamodb_table.orders
@@ -721,6 +758,7 @@ create "dynamodb_insert" "orders" {
 ```
 
 **InfluxDB**:
+
 ```hcl
 create "influxdb_insert" "metrics" {
   org    = "myorg"
@@ -751,6 +789,7 @@ type DataHandler interface {
 #### Upsert Behavior
 
 For `*_data` resources with `conflict_keys`:
+
 - MUST implement upsert semantics (INSERT ... ON CONFLICT DO UPDATE or equivalent)
 - MUST handle missing conflict keys gracefully
 - MUST validate conflict keys exist in the target table
@@ -1344,7 +1383,9 @@ func (h *TableHandler) Schema() *ObjectType {
 }
 ```
 
-> **Note**: Column items SHOULD also include a `check` property (type: `string`, description: `CHECK constraint expression`) for providers that support CHECK constraints. See the database provider repo's `PROVIDER_SPECIFICATION.md` Appendix G and H for full RLS and CHECK requirements.
+> **Note**: Column items SHOULD also include a `check` property (type: `string`, description:
+> `CHECK constraint expression`) for providers that support CHECK constraints. See the database
+> provider repo's `PROVIDER_SPECIFICATION.md` Appendix G and H for full RLS and CHECK requirements.
 
 ---
 
@@ -1391,6 +1432,7 @@ func (h *TableHandler) Schema() *ObjectType {
 ### 9.2 State Operations
 
 #### GetState
+
 ```go
 func (p *Provider) handleGetState(ctx context.Context, input []byte) ([]byte, error) {
     p.stateMu.RLock()
@@ -1404,6 +1446,7 @@ func (p *Provider) handleGetState(ctx context.Context, input []byte) ([]byte, er
 ```
 
 #### SetState
+
 ```go
 func (p *Provider) handleSetState(ctx context.Context, input []byte) ([]byte, error) {
     var req SetStateRequest
@@ -1428,7 +1471,7 @@ func (p *Provider) handleSetState(ctx context.Context, input []byte) ([]byte, er
 
 ### 9.3 Resource Status Transitions
 
-```
+```text
                     ┌─────────────────┐
                     │                 │
      Create ───────►│     active      │◄────── Update
@@ -1643,6 +1686,7 @@ func (p *Provider) Configure(ctx context.Context, config map[string]interface{})
 **ABSOLUTE PROHIBITION**: No simulation, mock, stub, or fake code in production paths.
 
 Prohibited patterns:
+
 - Functions containing "simulate", "mock", "fake", "stub"
 - Hardcoded success responses
 - Demo/development mode bypasses
@@ -1791,7 +1835,7 @@ func (h *TableHandler) Create(ctx context.Context, config map[string]interface{}
 
 ### 14.2 Test Organization
 
-```
+```text
 providers/{name}/
 ├── tests/
 │   ├── unit/
@@ -1809,18 +1853,21 @@ providers/{name}/
 ### 14.3 Required Test Scenarios
 
 #### Unit Tests
+
 - Configuration parsing and validation
 - Schema generation
 - SQL translation (for SQL providers)
 - Error handling
 
 #### Integration Tests
+
 - CRUD operations for each resource type
 - Resource discovery
 - State management
 - Transaction support (if applicable)
 
 #### E2E Tests
+
 - Full provider lifecycle (configure → plan → apply → destroy)
 - Multi-resource dependency ordering
 - Streaming handler operations
@@ -1892,6 +1939,7 @@ func setupTestDatabase(t *testing.T) (*sql.DB, func()) {
 **Providers**: PostgreSQL, MySQL, MSSQL, SQLite, CockroachDB
 
 **Requirements**:
+
 - All Tier 1 functions
 - All Tier 2 Enterprise functions (DetectDrift, ValidateState, GetAuditLog)
 - All Tier 2 Transaction functions
@@ -1899,6 +1947,7 @@ func setupTestDatabase(t *testing.T) (*sql.DB, func()) {
 - All Streaming functions
 
 **Resource Types** (minimum):
+
 - `schema`, `table`, `view`, `index`, `function`, `trigger`, `sequence`
 - `data`, `insert` (data seeding with upsert and insert-only)
 - `user`, `role`, `grant` (if supported)
@@ -1909,6 +1958,7 @@ func setupTestDatabase(t *testing.T) (*sql.DB, func()) {
 **Providers**: Snowflake, BigQuery, Redshift, Databricks, DuckDB
 
 **Requirements**:
+
 - All Tier 1 functions
 - Tier 2 Enterprise functions (DetectDrift, ValidateState)
 - Tier 3 Migration functions (may have limitations)
@@ -1916,12 +1966,14 @@ func setupTestDatabase(t *testing.T) (*sql.DB, func()) {
 - Batch operation support
 
 **Resource Types** (minimum):
+
 - `schema`, `table`, `view`, `function` (if supported)
 - `data`, `insert` (data seeding with upsert and insert-only)
 - `warehouse`, `stage` (provider-specific)
 - `stream_sink`, `stream_route`, `stream_outbox`
 
 **Notes**:
+
 - Transaction support varies (check provider documentation)
 - Migration operations may have limitations due to data volumes
 
@@ -1930,6 +1982,7 @@ func setupTestDatabase(t *testing.T) (*sql.DB, func()) {
 **Providers**: MongoDB, DynamoDB
 
 **Requirements**:
+
 - All Tier 1 functions
 - Transaction functions (if supported by database version)
 - Tier 3 Migration functions (document schema migrations)
@@ -1938,12 +1991,14 @@ func setupTestDatabase(t *testing.T) (*sql.DB, func()) {
 **Resource Types**:
 
 **MongoDB**:
+
 - `database`, `collection`, `index`, `validation`
 - `data`, `insert` (document seeding with upsert and insert-only)
 - `replica_set`, `shard` (if applicable)
 - `stream_sink`, `stream_route`, `stream_outbox`
 
 **DynamoDB**:
+
 - `table`, `global_secondary_index`, `local_secondary_index`
 - `data`, `insert` (item seeding with upsert and insert-only)
 - `stream`, `backup`, `global_table`
@@ -1954,12 +2009,14 @@ func setupTestDatabase(t *testing.T) (*sql.DB, func()) {
 **Providers**: InfluxDB
 
 **Requirements**:
+
 - All Tier 1 functions
 - Tier 3 Migration functions
 - All Streaming functions
 - NO transaction requirement (exempt)
 
 **Resource Types**:
+
 - `bucket`, `measurement`, `retention_policy`
 - `data`, `insert` (point seeding with upsert and insert-only)
 - `task`, `check`, `notification_endpoint`
@@ -1972,12 +2029,14 @@ func setupTestDatabase(t *testing.T) (*sql.DB, func()) {
 Use this checklist to verify provider compliance with the specification:
 
 ### Core Interface
+
 - [ ] `Configure()` method implemented
 - [ ] `Schema()` method implemented
 - [ ] `CallFunction()` method implemented
 - [ ] `Close()` method implemented
 
 ### Tier 1 Functions (ALL Required)
+
 - [ ] `CreateResource` routed and implemented
 - [ ] `ReadResource` routed and implemented
 - [ ] `UpdateResource` routed and implemented
@@ -1991,12 +2050,14 @@ Use this checklist to verify provider compliance with the specification:
 - [ ] `Version` routed and implemented
 
 ### Dependency Tree (All 13 Providers Compliant - December 2025)
+
 - [x] `analyzeProviderDependencies()` implemented
 - [x] `PlanResponse` includes `execution_order` field
 - [x] `Apply` executes resources in dependency order
 - [x] Plan and Apply use identical enterprise safety frameworks
 
 ### Tier 2 Functions (Conditional)
+
 - [ ] `DetectDrift` implemented (SQL/Analytical)
 - [ ] `ValidateState` implemented (SQL/Analytical)
 - [ ] `GetAuditLog` implemented (SQL only)
@@ -2005,11 +2066,13 @@ Use this checklist to verify provider compliance with the specification:
 - [ ] `RollbackTransaction` implemented (if DB supports)
 
 ### Tier 3 Functions (ALL Required)
+
 - [ ] `PlanMigration` routed and implemented
 - [ ] `ApplyMigration` routed and implemented
 - [ ] `RollbackMigration` routed and implemented
 
 ### Streaming Functions (ALL Required)
+
 - [ ] `stream_sink` handler registered
 - [ ] `stream_route` handler registered
 - [ ] `stream_outbox` handler registered
@@ -2017,6 +2080,7 @@ Use this checklist to verify provider compliance with the specification:
 - [ ] `OutboxCleanupRetention` implemented
 
 ### Data Resources (ALL Required)
+
 - [ ] `*_data` handler registered with upsert support
 - [ ] `*_insert` handler registered for insert-only operations
 - [ ] Data handlers implement full `CreateHandler` interface
@@ -2024,10 +2088,12 @@ Use this checklist to verify provider compliance with the specification:
 - [ ] Target resource dependency auto-detected by CLI
 
 ### Registry Parity
+
 - [ ] All create handlers have matching discover handlers
 - [ ] Schema() reflects all registered handlers
 
 ### Security
+
 - [ ] SecureString used for credentials
 - [ ] Parameterized SQL queries only
 - [ ] No sensitive data in logs
@@ -2035,12 +2101,14 @@ Use this checklist to verify provider compliance with the specification:
 - [ ] No simulation/mock code in production
 
 ### Testing
+
 - [ ] Unit test coverage >= 80%
 - [ ] Integration tests with real database
 - [ ] E2E lifecycle tests
 - [ ] No mock/simulation in tests
 
 ### Documentation
+
 - [ ] PROVIDER_STATUS.md exists
 - [ ] README.md with usage examples
 - [ ] Configuration options documented
@@ -2131,6 +2199,6 @@ When updating providers to comply with this specification:
 
 ---
 
-**End of Specification**
+**End of Specification.**
 
 *This document is the authoritative reference for Kolumn provider development. All providers MUST comply with these requirements.*

@@ -1,10 +1,12 @@
 # Database Discovery Interface
 
-The Kolumn Provider SDK includes a comprehensive database discovery interface that allows providers to implement full database introspection capabilities.
+The Kolumn Provider SDK includes a comprehensive database discovery interface that allows providers
+to implement full database introspection capabilities.
 
 ## Overview
 
 Database discovery enables providers to:
+
 - Scan entire databases for objects (tables, views, indexes, functions, etc.)
 - Gather statistics about database objects (size, row count, last modified)
 - Filter discovered objects by schema, type, or other criteria
@@ -50,6 +52,7 @@ type DiscoveryRequest struct {
 ### Example Requests
 
 **Discover all user tables:**
+
 ```json
 {
   "object_types": ["table"],
@@ -59,6 +62,7 @@ type DiscoveryRequest struct {
 ```
 
 **Discover all objects in specific schemas:**
+
 ```json
 {
   "schemas": ["public", "analytics"],
@@ -67,6 +71,7 @@ type DiscoveryRequest struct {
 ```
 
 **Full database discovery with statistics:**
+
 ```json
 {
   "include_system": true,
@@ -471,4 +476,5 @@ Discovery results are automatically integrated with:
 
 ## Complete Example
 
-See [`examples/postgres-discovery/`](../examples/postgres-discovery/) for a complete working example of database discovery implementation.
+See [`examples/postgres-discovery/`](../examples/postgres-discovery/) for a complete working example
+of database discovery implementation.

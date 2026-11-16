@@ -4,7 +4,9 @@
 
 ## Overview
 
-The Kolumn Provider SDK enables developers to build external providers that integrate with Kolumn's infrastructure-as-code platform. Following Go SDK best practices, this is a **library**, not an application framework.
+The Kolumn Provider SDK enables developers to build external providers that integrate with Kolumn's
+infrastructure-as-code platform. Following Go SDK best practices, this is a **library**, not an
+application framework.
 
 ### Key Features
 
@@ -15,11 +17,12 @@ The Kolumn Provider SDK enables developers to build external providers that inte
 
 ## 🚀 SDK Compatibility Status
 
-**✅ 100% CORE COMPATIBILITY ACHIEVED**
+### ✅ 100% CORE COMPATIBILITY ACHIEVED
 
 The Kolumn Provider SDK is now **fully compatible** with Kolumn core implementation:
 
-- **✅ Unified Function Dispatch**: Supports `CreateResource`, `ReadResource`, `UpdateResource`, `DeleteResource`, `Ping`, `DiscoverResources`
+- **✅ Unified Function Dispatch**: Supports `CreateResource`, `ReadResource`, `UpdateResource`,
+  `DeleteResource`, `Ping`, `DiscoverResources`
 - **✅ Enhanced Schema Structure**: Includes `SupportedFunctions`, `ResourceTypes`, and `ConfigSchema` fields
 - **✅ Configuration Interface**: Accepts `map[string]interface{}` for direct core compatibility
 - **✅ UnifiedDispatcher**: Bridges existing registries with new unified dispatch pattern
@@ -31,7 +34,7 @@ The Kolumn Provider SDK is now **fully compatible** with Kolumn core implementat
 
 ### 1. Create a New Provider Project
 
-**⚠️ Important: Provider Binary Naming Convention**
+#### ⚠️ Important: Provider Binary Naming Convention
 
 All provider binaries must follow the `kolumn-provider-{name}` pattern for automatic discovery by Kolumn core.
 
@@ -138,6 +141,7 @@ type Provider interface {
 ```
 
 **Why exactly 4 methods?**
+
 - **Clean RPC interface** - Simple, predictable communication protocol
 - **Core compatibility** - Matches Kolumn core's provider contract exactly
 - **No method bloat** - Avoids interface pollution and complexity
@@ -177,6 +181,7 @@ discoverRegistry.RegisterHandler("existing_tables", discoverer, discoverySchema)
 **The ValidateConfig method was removed from the Provider interface to maintain the 4-method RPC pattern.**
 
 **Why was it removed?**
+
 - **Interface purity** - Keeps Provider interface to exactly 4 RPC methods
 - **Internal concern** - Configuration validation should happen within `Configure()`
 - **No RPC overhead** - Validation doesn't need separate network calls
@@ -184,6 +189,7 @@ discoverRegistry.RegisterHandler("existing_tables", discoverer, discoverySchema)
 ### ✅ Validation Alternatives
 
 **1. Validate within Configure() method:**
+
 ```go
 func (p *MyProvider) Configure(ctx context.Context, config map[string]interface{}) error {
     // Use helper methods for validation
@@ -203,6 +209,7 @@ func (p *MyProvider) validateConfiguration(ctx context.Context, config map[strin
 ```
 
 **2. Use BaseProvider helper (optional):**
+
 ```go
 type MyProvider struct {
     *core.BaseProvider
@@ -263,4 +270,5 @@ See LICENSE file for details.
 
 **Ready to build Kolumn providers!** 🚀
 
-The SDK provides everything you need to build production-ready providers that integrate with Kolumn's infrastructure-as-code platform.
+The SDK provides everything you need to build production-ready providers that integrate with
+Kolumn's infrastructure-as-code platform.

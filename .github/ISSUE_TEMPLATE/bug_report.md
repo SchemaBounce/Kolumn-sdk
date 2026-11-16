@@ -33,7 +33,7 @@ assignees: ''
 
 ## Error Output
 
-```
+```text
 <!-- Paste any error messages or logs here -->
 ```
 

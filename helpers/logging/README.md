@@ -1,10 +1,12 @@
 # Kolumn Provider Logging SDK
 
-This package provides a universal logging standard for all Kolumn providers, transforming JSON-heavy logs into human-readable format that matches core Kolumn's logging style.
+This package provides a universal logging standard for all Kolumn providers, transforming JSON-heavy
+logs into human-readable format that matches core Kolumn's logging style.
 
 ## Overview
 
-The logging SDK addresses the common issue where providers output verbose JSON logs that are difficult for humans to read. This package provides:
+The logging SDK addresses the common issue where providers output verbose JSON logs that are
+difficult for humans to read. This package provides:
 
 - **Human-readable logs by default** - Clear, structured messages for operations
 - **JSON logs only in debug mode** - Full request/response data when debugging
@@ -39,6 +41,7 @@ func main() {
 Replace existing log statements with the appropriate component logger:
 
 **Before:**
+
 ```go
 log.Printf("Configuring provider with endpoint: %s", endpoint)
 log.Printf("Creating table: %s", req.Name)
@@ -46,6 +49,7 @@ fmt.Printf("Request data: %+v", req)
 ```
 
 **After:**
+
 ```go
 logging.ConfigLogger.Info("Configuring provider with endpoint: %s", sanitizedEndpoint)
 logging.HandlerLogger.Info("Creating table: %s", req.Name)
@@ -71,9 +75,10 @@ The SDK provides these pre-configured loggers for common provider components:
 ## Log Levels and Output
 
 ### Normal Mode (Default)
+
 Human-readable logs with operation context:
 
-```
+```text
 [KOLUMN-INFO] PROVIDER          │ Starting CreateResource operation on table 'users'
 [KOLUMN-INFO] CONNECTION        │ Successfully connected to postgres://user:***@localhost:5432/db
 [KOLUMN-INFO] HANDLER           │ Completed CreateResource operation on table 'users' in 245ms
@@ -82,9 +87,10 @@ Human-readable logs with operation context:
 ```
 
 ### Debug Mode (DEBUG=1)
+
 Includes detailed JSON data and debug information:
 
-```
+```text
 [KOLUMN-INFO] PROVIDER          │ Starting CreateResource operation on table 'users'
 [KOLUMN-DEBUG] HANDLER           │ CreateResource request: {name: "users", schema: "public", columns: [...]}
 [KOLUMN-DEBUG] VALIDATION        │ Schema validation passed for table
@@ -220,6 +226,7 @@ err := logging.LogProviderOperation(logging.HandlerLogger, context, func() error
 ### Step 1: Replace Existing Log Statements
 
 **Old pattern:**
+
 ```go
 import "log"
 
@@ -232,6 +239,7 @@ func (p *Provider) Create(req *CreateRequest) (*CreateResponse, error) {
 ```
 
 **New pattern:**
+
 ```go
 import "github.com/schemabounce/kolumn/sdk/helpers/logging"
 
@@ -311,8 +319,9 @@ func TestProviderLogging(t *testing.T) {
 
 ## Example Output
 
-### Production Mode
-```
+### Production Mode Output
+
+```text
 [KOLUMN-INFO] PROVIDER          │ PostgreSQL provider v1.2.3 initializing
 [KOLUMN-INFO] CONFIG            │ Loading configuration from environment
 [KOLUMN-INFO] CONNECTION        │ Successfully connected to postgres://user:***@db.example.com:5432/production
@@ -322,8 +331,9 @@ func TestProviderLogging(t *testing.T) {
 [KOLUMN-INFO] HANDLER           │ Completed CreateResource operation on table 'users' in 245ms
 ```
 
-### Debug Mode (DEBUG=1)
-```
+### Debug Mode (DEBUG=1) Output
+
+```text
 [KOLUMN-INFO] PROVIDER          │ PostgreSQL provider v1.2.3 initializing
 [KOLUMN-DEBUG] CONFIG            │ Configuration details: {host: "db.example.com", port: 5432, database: "production", username: "user", password: "<redacted>"}
 [KOLUMN-INFO] CONNECTION        │ Successfully connected to postgres://user:***@db.example.com:5432/production
@@ -347,7 +357,9 @@ func TestProviderLogging(t *testing.T) {
 
 ## Plan Resource Evaluation Patterns
 
-When implementing the `Plan` function in providers, follow these patterns to ensure high-quality, actionable CLI output. The goal is **brief, actionable logs**: one line per unchanged item and SQL-focused output for changes.
+When implementing the `Plan` function in providers, follow these patterns to ensure high-quality,
+actionable CLI output. The goal is **brief, actionable logs**: one line per unchanged item and
+SQL-focused output for changes.
 
 ### Required Functions
 
@@ -503,7 +515,8 @@ func (p *Provider) handlePlan(ctx context.Context, input json.RawMessage) (json.
 With these patterns, CLI output transforms from verbose JSON to concise, actionable logs:
 
 **Before (verbose):**
-```
+
+```text
 Planning postgres_insert.seed_roles...
   Action: CREATE
   Config: {"table":"roles","values":{"id":"admin","name":"Administrator","permissions":["read","write","delete"],"created_at":"2024-01-01T00:00:00Z","_template_context":{"source":"seeds/roles.csv","line":1}}}
@@ -513,7 +526,8 @@ Planning postgres_insert.seed_users...
 ```
 
 **After (actionable):**
-```
+
+```text
   postgres_insert.seed_roles: NOOP (row already exists)
   postgres_insert.seed_users: NOOP (row already exists)
   postgres_table.audit_log: CREATE

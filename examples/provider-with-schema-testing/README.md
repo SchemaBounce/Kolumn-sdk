@@ -1,6 +1,7 @@
 # Example Kolumn Provider with Schema Testing
 
-This example demonstrates how to build a Kolumn provider with comprehensive schema consistency testing using the Kolumn SDK testing framework.
+This example demonstrates how to build a Kolumn provider with comprehensive schema consistency
+testing using the Kolumn SDK testing framework.
 
 ## Features Demonstrated
 
@@ -20,15 +21,18 @@ This example demonstrates how to build a Kolumn provider with comprehensive sche
 ## Provider Features
 
 ### Resources
+
 - `example_table` - Database table management
 - `example_user` - User management
 
 ### Operations
+
 - Full CRUD operations for all resources
 - Proper error handling and validation
 - JSON-based configuration and state
 
 ### Configuration
+
 - `endpoint` - Database endpoint URL
 - `api_key` - API authentication key
 - `timeout` - Connection timeout duration
@@ -36,26 +40,31 @@ This example demonstrates how to build a Kolumn provider with comprehensive sche
 ## Running the Example
 
 ### 1. Install Dependencies
+
 ```bash
 go mod tidy
 ```
 
 ### 2. Run the Provider
+
 ```bash
 go run main.go
 ```
 
 ### 3. Run Schema Consistency Tests
+
 ```bash
 go test . -run TestSchemaImplementationConsistency -v
 ```
 
 ### 4. Run All Tests
+
 ```bash
 go test . -v
 ```
 
 ### 5. Set Up Pre-commit Hooks
+
 ```bash
 pip install pre-commit
 pre-commit install
@@ -65,7 +74,8 @@ pre-commit run --all-files
 ## Expected Output
 
 ### Schema Consistency Test
-```
+
+```text
 === RUN   TestSchemaImplementationConsistency
 === RUN   TestSchemaImplementationConsistency/ConfigurationSchemaConsistency
 === RUN   TestSchemaImplementationConsistency/ResourceSchemaConsistency
@@ -75,7 +85,8 @@ pre-commit run --all-files
 ```
 
 ### Provider Execution
-```
+
+```text
 Example provider created: &{endpoint: apiKey: timeout:}
 2024/01/01 00:00:00 Configured example provider: endpoint=localhost:5432, timeout=30s
 Provider schema: example v1.0.0

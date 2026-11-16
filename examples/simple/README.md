@@ -5,6 +5,7 @@ This example demonstrates the basic patterns for implementing a provider using t
 ## Key Concepts Demonstrated
 
 ### 1. **Simple Provider Interface**
+
 ```go
 // Simple 4-method Provider interface
 type Provider interface {
@@ -16,6 +17,7 @@ type Provider interface {
 ```
 
 ### 2. **Create/Discover Object Categorization**
+
 ```go
 // CREATE objects - resources the provider can create and manage
 CreateObjects: map[string]*core.ObjectType{
@@ -37,6 +39,7 @@ DiscoverObjects: map[string]*core.ObjectType{
 ```
 
 ### 3. **Handler Registration Pattern**
+
 ```go
 // Register CREATE handlers
 createRegistry := create.NewRegistry()
@@ -48,6 +51,7 @@ discoverRegistry.RegisterHandler("existing_tables", discoverer, discoverySchema)
 ```
 
 ### 4. **Operation Routing**
+
 ```go
 switch operation {
 case "create", "read", "update", "delete", "plan":
@@ -63,13 +67,15 @@ case "scan", "analyze", "query":
 ## Usage
 
 ### Running the Example
+
 ```bash
 cd examples/simple
 go run provider.go
 ```
 
 ### Expected Output
-```
+
+```text
 Configuring provider with endpoint: postgresql://localhost:5432/mydb
 Provider: simple v1.0.0
 CREATE objects: 1
