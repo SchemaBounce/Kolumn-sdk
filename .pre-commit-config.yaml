@@ -100,11 +100,12 @@ repos:
         name: Format Go code (gofumpt - stricter)
         entry: scripts/check-gofumpt.sh
         language: script
-        files: \.go$
+        files: '\.go$|(^|/)go\.mod$|^scripts/check-gofumpt\.sh$'
         pass_filenames: false
         verbose: true
 
-      # gosec security scanner, run as `make security` runs it. The previously
+      # gosec security scanner, the command `make security` runs (but failing
+      # on findings, which `make security` does not). The previously
       # pinned securecodewarrior/github-action-add-sarif repository does not
       # exist. Prints SKIPPED (and passes) only when gosec is not installed.
       - id: gosec
