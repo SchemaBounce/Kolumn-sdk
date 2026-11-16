@@ -33,8 +33,9 @@ readonly ALLOWED_IDENTIFIERS=(
     "./helpers/ui/human_output_test.go|FormatTerraformStyle"
 )
 
-# banned_lines FILE prints the file's lines that still contain the banned
-# term after removing the identifiers allowed for that file.
+# banned_lines FILE prints, as file:line:text, the original lines that still
+# contain the banned term after removing the identifiers allowed for that
+# file.
 banned_lines() {
     local file="$1"
     local sed_args=(-e ':a')
@@ -51,7 +52,11 @@ banned_lines() {
         grep -nHi "terraform" "$file" 2>/dev/null || true
         return
     fi
-    sed -E "${sed_args[@]}" "$file" | grep -ni "terraform" 2>/dev/null | sed "s|^|$file:|" || true
+    local line_num
+    sed -E "${sed_args[@]}" "$file" | grep -ni "terraform" 2>/dev/null | cut -d: -f1 |
+        while IFS= read -r line_num; do
+            printf '%s:%s:%s\n' "$file" "$line_num" "$(sed -n "${line_num}p" "$file")"
+        done || true
 }
 
 # Direct approach - check files one by one using find

@@ -11,12 +11,17 @@
 #      module name contains "provider" must be named kolumn-provider-{name}.
 #   2. Provider binaries: a `go build -o <out>` in a build file or doc whose
 #      output name contains "provider" must be kolumn-provider-{name}.
-#      Rules 1 and 2 only see names that say "provider": a provider binary
-#      named plainly `mydb` is indistinguishable from any other tool here.
+#      Rules 1 and 2 only see names that say "provider" (in any case): a
+#      provider binary named plainly `mydb` is indistinguishable from any
+#      other tool here. Rule 2 also skips output names built from shell or
+#      make variables ($(BINARY), ${NAME}) and does not follow a -o flag
+#      continued onto the next line.
 #   3. Provider names in docs and build files: every concrete
-#      kolumn-provider-<x> must be a valid name. The placeholder
-#      kolumn-provider-{name}, shell-templated names (kolumn-provider-$NAME,
-#      kolumn-provider-${NAME}) and sentence-ending dots are not violations.
+#      kolumn-provider-<x> must be a valid name. Placeholders
+#      (kolumn-provider-{name}, kolumn-provider-<name>), shell-templated names
+#      (kolumn-provider-$NAME, kolumn-provider-${NAME}), a trailing .exe and
+#      sentence-ending dots are not violations. Release archive names such
+#      as kolumn-provider-x_1.0.0_linux_amd64.tar.gz would be reported.
 #   4. README.md must still state the rule, and its `go mod init` example
 #      must use a valid kolumn-provider-{name} module.
 #
@@ -72,7 +77,7 @@ echo -e "${BLUE}Provider modules (go.mod outside examples/ and templates/)...${N
 while IFS= read -r mod; do
     module=$(awk '$1 == "module" { print $2; exit }' "$mod")
     last="${module##*/}"
-    if [[ $last == *provider* ]]; then
+    if [[ $(tr '[:upper:]' '[:lower:]' <<< "$last") == *provider* ]]; then
         check_name "$mod" "$last"
     fi
 done < <(find . \( -path ./.git -o -path ./examples -o -path ./templates -o -path '*/vendor' \) -prune \
@@ -86,7 +91,7 @@ for f in "${doc_and_build_files[@]}"; do
         [[ $out == *'$'* ]] && continue   # shell-templated output name
         name=$(basename "$out" .exe)
         while [[ $name == *. ]]; do name="${name%.}"; done
-        if [[ $name == *provider* ]]; then
+        if [[ $(tr '[:upper:]' '[:lower:]' <<< "$name") == *provider* ]]; then
             check_name "$f:$line_num" "$name"
         fi
     done < <(grep -nE 'go build[^#]*[[:space:]]-o[[:space:]=]+[^[:space:]]+' "$f" 2>/dev/null |
@@ -98,8 +103,11 @@ echo -e "${BLUE}Provider names in docs and build files...${NC}"
 for f in "${doc_and_build_files[@]}"; do
     while IFS=: read -r line_num token; do
         [[ $token == "$PLACEHOLDER" ]] && continue
-        [[ $token == *'$'* ]] && continue
+        [[ $token == *'$'* ]] && continue   # shell-templated
+        [[ $token == *'{'* ]] && continue   # {placeholder}
+        [[ $token == kolumn-provider- ]] && continue   # <placeholder>
         while [[ $token == *. ]]; do token="${token%.}"; done
+        token="${token%.exe}"
         check_name "$f:$line_num" "$token"
     done < <(grep -noE 'kolumn-provider-[^][:space:]`"'"'"'(),;:<>|*/\\$]*\$?' "$f" 2>/dev/null || true)
 done
