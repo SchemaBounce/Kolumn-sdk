@@ -111,34 +111,39 @@ repos:
       # Example code validation. The nested example module builds against
       # this checkout of the SDK (replace directive), so any SDK Go or
       # go.mod/go.sum change can break it, not only edits under examples/.
+      # Edits to the script itself also re-run it.
       - id: validate-examples
         name: Vet and test examples
         entry: scripts/validate-examples.sh
         language: script
-        files: '\.go$|(^|/)go\.(mod|sum)$'
+        files: '\.go$|(^|/)go\.(mod|sum)$|^scripts/validate-examples\.sh$'
         pass_filenames: false
         
-      # Interface compliance check
+      # Interface compliance check (type-checks every module against
+      # core.Provider; see scripts/providercheck/main.go)
       - id: interface-compliance
         name: Check Provider interface compliance
         entry: scripts/check-interface-compliance.sh
         language: script
-        files: \.go$
+        files: '\.go$|(^|/)go\.(mod|sum)$|^scripts/check-interface-compliance\.sh$'
         pass_filenames: false
         
-      # Binary naming validation
+      # Binary naming validation. The check reads go.mod files, docs and
+      # build files (not Go sources) and always scans the whole repository.
       - id: binary-naming
         name: Validate provider binary naming convention
         entry: scripts/check-binary-naming.sh
         language: script
-        files: examples/.*\.go$|cmd/.*\.go$
+        files: '(^|/)go\.mod$|(^|/)Makefile$|\.(md|mk|sh|ya?ml)$'
+        pass_filenames: false
         
-      # Schema validation
+      # Schema validation (type-checks every module; see
+      # scripts/providercheck/main.go)
       - id: schema-validation
         name: Validate provider schemas
         entry: scripts/validate-schemas.sh
         language: script
-        files: \.go$
+        files: '\.go$|(^|/)go\.(mod|sum)$|^scripts/validate-schemas\.sh$'
         pass_filenames: false
 
   # Markdown linting
