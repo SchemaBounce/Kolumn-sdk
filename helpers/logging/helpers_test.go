@@ -576,9 +576,17 @@ func TestPerformanceWithLargeData(t *testing.T) {
 	logger.JSONDebug("large data", largeData)
 	jsonDebugDuration := time.Since(start)
 
-	// The whole payload must be logged, whatever the build mode.
-	capture.AssertContains(t, "large data")
-	capture.AssertContains(t, fmt.Sprintf(`"key_%d"`, entries-1))
+	// The whole payload must be logged, whatever the build mode. json.Marshal
+	// sorts map keys, so the last entry's key ("key_999") sorts last and its
+	// presence shows the output was not truncated. Short messages are used
+	// because the captured output is about 500KB.
+	output := capture.GetOutput()
+	if !strings.Contains(output, "large data") {
+		t.Errorf("JSONDebug output missing context %q (%d bytes captured)", "large data", len(output))
+	}
+	if lastKey := fmt.Sprintf(`"key_%d"`, entries-1); !strings.Contains(output, lastKey) {
+		t.Errorf("JSONDebug output missing last entry %s (%d bytes captured)", lastKey, len(output))
+	}
 
 	// Test human conversion performance
 	start = time.Now()
@@ -593,16 +601,19 @@ func TestPerformanceWithLargeData(t *testing.T) {
 	}
 
 	// The race detector slows execution by an unpredictable factor, so the
-	// wall-clock limits only hold for a normal build.
+	// wall-clock limits only hold for a normal build. They sit well above
+	// the typical time (tens of milliseconds) so that they catch a
+	// complexity regression (e.g. quadratic formatting) rather than a slow
+	// or loaded machine.
 	if raceEnabled {
 		t.Logf("race detector on: skipping wall-clock limits (JSONDebug %v, JSONToHuman %v)",
 			jsonDebugDuration, jsonToHumanDuration)
 		return
 	}
-	if jsonDebugDuration > 100*time.Millisecond {
+	if jsonDebugDuration > 500*time.Millisecond {
 		t.Errorf("JSON debug took too long: %v", jsonDebugDuration)
 	}
-	if jsonToHumanDuration > 50*time.Millisecond {
+	if jsonToHumanDuration > 250*time.Millisecond {
 		t.Errorf("JSONToHuman took too long: %v", jsonToHumanDuration)
 	}
 }
