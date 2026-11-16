@@ -37,3 +37,4 @@ No GitHub SSH key is needed. Codex and other agents: copy
 `skills/schemabounce-decisions/` from the kit and add the hosted MCP
 (https://mcp.schemabounce.com/mcp) to their configuration.
 <!-- schemabounce-agent-kit:decisions end -->
+

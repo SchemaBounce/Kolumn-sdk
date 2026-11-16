@@ -516,7 +516,7 @@ func (e *DocumentationExtractor) inferResourceType(name string) string {
 func (e *DocumentationExtractor) generateBasicExample(resourceType string) string {
 	return fmt.Sprintf(`create "%s" "example" {
   name = "example-%s"
-
+  
   # Add your configuration here
 }`, resourceType, strings.ReplaceAll(resourceType, "_", "-"))
 }

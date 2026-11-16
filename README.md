@@ -19,7 +19,7 @@ The Kolumn Provider SDK enables developers to build external providers that inte
 
 The Kolumn Provider SDK is now **fully compatible** with Kolumn core implementation:
 
-- **✅ Unified Function Dispatch**: Supports `CreateResource`, `ReadResource`, `UpdateResource`, `DeleteResource`, `Ping`, `DiscoverResources`
+- **✅ Unified Function Dispatch**: Supports `CreateResource`, `ReadResource`, `UpdateResource`, `DeleteResource`, `Ping`, `DiscoverResources`  
 - **✅ Enhanced Schema Structure**: Includes `SupportedFunctions`, `ResourceTypes`, and `ConfigSchema` fields
 - **✅ Configuration Interface**: Accepts `map[string]interface{}` for direct core compatibility
 - **✅ UnifiedDispatcher**: Bridges existing registries with new unified dispatch pattern
@@ -158,14 +158,14 @@ createRegistry := create.NewRegistry()
 createRegistry.RegisterHandler("table", tableHandler, tableSchema)
 
 // Register DISCOVER object handlers
-discoverRegistry := discover.NewRegistry()
+discoverRegistry := discover.NewRegistry()  
 discoverRegistry.RegisterHandler("existing_tables", discoverer, discoverySchema)
 ```
 
 ## Package Structure
 
 - **`core/`** - Core Provider interface and types
-- **`create/`** - CREATE object handler utilities
+- **`create/`** - CREATE object handler utilities  
 - **`discover/`** - DISCOVER object handler utilities
 - **`helpers/validation/`** - Configuration validation helpers
 - **`examples/simple/`** - Working example provider

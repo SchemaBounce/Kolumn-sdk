@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-
 	sdkauth "github.com/schemabounce/kolumn/sdk/core/auth"
 )
 
