@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/schemabounce/kolumn-sdk/testing"
+	sdktesting "github.com/schemabounce/kolumn/sdk/testing"
 )
 
 // ExampleProvider demonstrates how to implement a Kolumn provider
@@ -22,12 +22,12 @@ func NewExampleProvider() *ExampleProvider {
 	return &ExampleProvider{}
 }
 
-// Ensure ExampleProvider implements the testing.SchemaProvider interface
-var _ testing.SchemaProvider = (*ExampleProvider)(nil)
+// Ensure ExampleProvider implements the sdktesting.SchemaProvider interface
+var _ sdktesting.SchemaProvider = (*ExampleProvider)(nil)
 
 // Schema returns the provider's schema definition
-func (p *ExampleProvider) Schema() (*testing.ProviderSchema, error) {
-	return &testing.ProviderSchema{
+func (p *ExampleProvider) Schema() (*sdktesting.ProviderSchema, error) {
+	return &sdktesting.ProviderSchema{
 		Name:     "example",
 		Version:  "1.0.0",
 		Protocol: "rpc",
@@ -36,7 +36,7 @@ func (p *ExampleProvider) Schema() (*testing.ProviderSchema, error) {
 			"create_table", "read_table", "update_table", "delete_table",
 			"create_user", "read_user", "update_user", "delete_user",
 		},
-		ResourceTypes: []testing.ResourceTypeDefinition{
+		ResourceTypes: []sdktesting.ResourceTypeDefinition{
 			{
 				Name:        "example_table",
 				Description: "Database table resource",

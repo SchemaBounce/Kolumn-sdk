@@ -15,24 +15,24 @@ The Kolumn SDK Testing Framework provides comprehensive schema consistency testi
 
 1. **Add the dependency**:
    ```go
-   import "github.com/schemabounce/kolumn-sdk/testing"
+   import sdktesting "github.com/schemabounce/kolumn/sdk/testing"
    ```
 
 2. **Create a test file**:
    ```go
    func TestSchemaConsistency(t *testing.T) {
        provider := NewMyProvider()
-       config := &testing.SchemaTestConfig{
+       config := &sdktesting.SchemaTestConfig{
            Provider: provider,
-           ExpectedConfigFields: map[string]testing.ConfigFieldExpectation{
+           ExpectedConfigFields: map[string]sdktesting.ConfigFieldExpectation{
                "endpoint": {FieldType: "string", Description: "API endpoint"},
            },
-           ExpectedResources: map[string]testing.ResourceExpectation{
+           ExpectedResources: map[string]sdktesting.ResourceExpectation{
                "my_resource": {Operations: []string{"create", "read", "update", "delete"}},
            },
            ExpectedFunctions: []string{"create_resource", "read_resource"},
        }
-       testing.RunSchemaConsistencyTests(t, config)
+       sdktesting.RunSchemaConsistencyTests(t, config)
    }
    ```
 
@@ -46,7 +46,7 @@ The Kolumn SDK Testing Framework provides comprehensive schema consistency testi
 
 ## Interface Requirements
 
-Your provider must implement `testing.SchemaProvider`:
+Your provider must implement `sdktesting.SchemaProvider`:
 
 ```go
 type SchemaProvider interface {

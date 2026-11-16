@@ -18,7 +18,7 @@ NC := \033[0m # No Color
 .DEFAULT_GOAL := help
 
 # Phony targets
-.PHONY: help setup install-tools clean build test test-verbose test-coverage lint fmt check pre-commit validate-examples check-docs security deps-update deps-verify verify-all ci
+.PHONY: help setup install-tools clean build test test-examples test-verbose test-coverage lint fmt check pre-commit validate-examples check-docs security deps-update deps-verify verify-all ci
 
 ## Help
 help: ## Show this help message
@@ -70,10 +70,19 @@ clean: ## Clean build artifacts and cache
 	@echo -e "$(GREEN)✅ Clean completed$(NC)"
 
 ## Testing
-test: ## Run tests
+test: test-examples ## Run tests (root module and example modules)
 	@echo -e "$(GREEN)Running tests...$(NC)"
 	@go test -race ./...
 	@echo -e "$(GREEN)✅ Tests passed$(NC)"
+
+test-examples: ## Vet and test example modules that have their own go.mod
+	@echo -e "$(GREEN)Testing example modules...$(NC)"
+	@set -e; for mod in $$(find examples -name go.mod); do \
+		dir=$$(dirname $$mod); \
+		echo -e "$(BLUE)  $$dir$(NC)"; \
+		(cd $$dir && go vet ./... && go test -race ./...); \
+	done
+	@echo -e "$(GREEN)✅ Example modules passed$(NC)"
 
 test-verbose: ## Run tests with verbose output
 	@echo -e "$(GREEN)Running tests with verbose output...$(NC)"

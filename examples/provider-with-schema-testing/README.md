@@ -15,7 +15,7 @@ This example demonstrates how to build a Kolumn provider with comprehensive sche
 - `main.go` - Complete provider implementation
 - `schema_consistency_test.go` - Schema testing demonstration
 - `.pre-commit-config.yaml` - Pre-commit hook configuration
-- `go.mod` - Go module definition
+- `go.mod` - Go module definition; its `replace` builds against the SDK in this repository (`../..`), not a published version
 
 ## Provider Features
 
