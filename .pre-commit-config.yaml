@@ -110,7 +110,7 @@ repos:
         
       # Example code validation
       - id: validate-examples
-        name: Validate example code compiles
+        name: Vet and test examples
         entry: scripts/validate-examples.sh
         language: script
         files: examples/.*\.go$
