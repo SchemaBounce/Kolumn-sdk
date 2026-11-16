@@ -32,6 +32,8 @@ import "context"
 //	    // Build DiscoveredObject instances for each database object
 //	    // Return DiscoveryResult with statistics
 //	}
+//
+// DiscoverDatabase takes a DiscoveryRequest and returns a DiscoveryResult.
 type DatabaseDiscoverer interface {
 	// DiscoverDatabase performs comprehensive database introspection
 	DiscoverDatabase(ctx context.Context, req *DiscoveryRequest) (*DiscoveryResult, error)
