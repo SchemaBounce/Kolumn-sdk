@@ -84,10 +84,12 @@ pipeline:
           paths: ['**/*.go', 'go.mod', 'go.sum']
         env: { GOMAXPROCS: '2', GOMEMLIMIT: '1200MiB' }
 
-      # The SDK bans the word "terraform" (Makefile check-banned-terms), but
-      # existing exported names such as FormatTerraformStyle already contain
-      # it, so this looks only at lines the change ADDS. Advisory: a new call
-      # to one of those existing names is legitimate.
+      # The SDK bans the word "terraform" (Makefile check-banned-terms). This
+      # step looks only at lines the change ADDS. The only allowed uses are
+      # the deprecated helpers/ui aliases FormatTerraformStyle and
+      # FormatTerraformStyleWithDuration, which scripts/check-banned-terms.sh
+      # allow-lists; new code should call FormatResourceAction instead.
+      # Advisory, because a change to those aliases themselves is legitimate.
       - name: banned-terms
         run: |
           ADDED=$( { git diff --no-color -U0 HEAD -- '*.go' '*.md' ':!CLAUDE.md' ':!scripts/check-banned-terms.sh' \

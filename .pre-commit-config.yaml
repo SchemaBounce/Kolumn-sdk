@@ -98,7 +98,9 @@ repos:
         name: Check for banned terms (terraform references)
         entry: scripts/check-banned-terms.sh
         language: script
-        files: \.(go|md|txt|yaml|yml|json)$
+        # The script scans every .go and .md file and ignores its arguments.
+        files: '\.(go|md)$|^scripts/check-banned-terms\.sh$'
+        pass_filenames: false
         
       # Documentation validation
       - id: go-doc-check
