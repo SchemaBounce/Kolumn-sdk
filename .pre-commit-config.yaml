@@ -108,12 +108,14 @@ repos:
         files: \.go$
         pass_filenames: true
         
-      # Example code validation
+      # Example code validation. The nested example module builds against
+      # this checkout of the SDK (replace directive), so any SDK Go or
+      # go.mod/go.sum change can break it, not only edits under examples/.
       - id: validate-examples
         name: Vet and test examples
         entry: scripts/validate-examples.sh
         language: script
-        files: examples/.*\.go$
+        files: '\.go$|(^|/)go\.(mod|sum)$'
         pass_filenames: false
         
       # Interface compliance check
