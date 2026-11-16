@@ -19,7 +19,7 @@ repos:
         name: Validate TOML files
       - id: check-xml
         name: Validate XML files
-      
+
       # Security and safety checks
       - id: detect-private-key
         name: Detect private keys
@@ -32,7 +32,7 @@ repos:
         name: Check for merge conflicts
       - id: check-symlinks
         name: Check for broken symlinks
-      
+
       # Code quality
       - id: mixed-line-ending
         name: Check for mixed line endings
@@ -49,18 +49,14 @@ repos:
         name: Format Go code (gofmt)
       - id: go-imports
         name: Organize Go imports (goimports)
-      - id: go-vet-mod
-        name: Static analysis (go vet)
       - id: go-mod-tidy
         name: Tidy go.mod (go mod tidy)
       - id: go-unit-tests
         name: Run Go unit tests
         args: ['-v', './...']
-      - id: go-build-mod
-        name: Build Go modules
       - id: go-critic
         name: Go code review (go-critic)
-      - id: golangci-lint-mod
+      - id: golangci-lint
         name: Comprehensive Go linting (golangci-lint)
 
   # Additional Go formatting with gofumpt (stricter than gofmt)
@@ -93,6 +89,27 @@ repos:
   # Custom hooks for SDK-specific requirements
   - repo: local
     hooks:
+      # go vet over the root module. dnephin/pre-commit-golang v0.5.1 (its
+      # latest tag) has no go-vet-mod, and its go-vet hook vets per changed
+      # directory, which breaks on the nested examples module. The examples
+      # module is vetted by validate-examples below.
+      - id: go-vet
+        name: Static analysis (go vet)
+        entry: go vet ./...
+        language: system
+        files: '\.go$|(^|/)go\.(mod|sum)$'
+        pass_filenames: false
+
+      # go build over the root module. v0.5.1 has no go-build-mod, and its
+      # go-build hook passes an explicit package list, which errors on
+      # test-only packages such as templates/.
+      - id: go-build
+        name: Build Go modules
+        entry: go build ./...
+        language: system
+        files: '\.go$|(^|/)go\.(mod|sum)$'
+        pass_filenames: false
+
       # Banned terms detection (terraform references)
       - id: banned-terms
         name: Check for banned terms (terraform references)
@@ -101,7 +118,7 @@ repos:
         # The script scans every .go and .md file and ignores its arguments.
         files: '\.(go|md)$|^scripts/check-banned-terms\.sh$'
         pass_filenames: false
-        
+
       # Documentation validation
       - id: go-doc-check
         name: Check Go documentation coverage
@@ -109,7 +126,7 @@ repos:
         language: script
         files: \.go$
         pass_filenames: true
-        
+
       # Example code validation. The nested example module builds against
       # this checkout of the SDK (replace directive), so any SDK Go or
       # go.mod/go.sum change can break it, not only edits under examples/.
@@ -120,7 +137,7 @@ repos:
         language: script
         files: '\.go$|(^|/)go\.(mod|sum)$|^scripts/validate-examples\.sh$'
         pass_filenames: false
-        
+
       # Interface compliance check (type-checks every module against
       # core.Provider; see scripts/providercheck/main.go)
       - id: interface-compliance
@@ -129,7 +146,7 @@ repos:
         language: script
         files: '\.go$|(^|/)go\.(mod|sum)$|^scripts/check-interface-compliance\.sh$'
         pass_filenames: false
-        
+
       # Binary naming validation. The check reads go.mod files, docs and
       # build files (not Go sources) and always scans the whole repository.
       - id: binary-naming
@@ -138,7 +155,7 @@ repos:
         language: script
         files: '(^|/)go\.mod$|(^|/)Makefile$|\.(md|mk|sh|ya?ml)$'
         pass_filenames: false
-        
+
       # Schema validation (type-checks every module; see
       # scripts/providercheck/main.go)
       - id: schema-validation

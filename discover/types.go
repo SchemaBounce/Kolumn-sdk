@@ -290,14 +290,14 @@ func (e *RelationEnricher) Name() string {
 func BuildScanExample(objectType, scanType string) *core.ObjectExample {
 	hcl := fmt.Sprintf(`discover "%s" "scan" {
   scan_type = "%s"
-  
+
   # Scan options
   options = {
     include_metrics = true
     include_security = true
     depth = 2
   }
-  
+
   # Filters
   filters = {
     name_pattern = "*prod*"

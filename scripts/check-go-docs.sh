@@ -53,35 +53,35 @@ for file in $FILES; do
     if [[ ! -f "$file" ]]; then
         continue
     fi
-    
+
     echo -e "${BLUE}Checking $file...${NC}"
-    
+
     # Skip test files for documentation requirements
     if [[ $file =~ _test\.go$ ]]; then
         echo -e "${YELLOW}  Skipping test file${NC}"
         continue
     fi
-    
+
     # Read file line by line
     prev_line=""
     line_num=0
-    
+
     while IFS= read -r line; do
         line_num=$((line_num + 1))
-        
+
         # Skip empty lines and build constraints
         if [[ -z "$line" ]] || [[ $line =~ ^//[[:space:]]*\+build ]] || [[ $line =~ ^//go: ]]; then
             prev_line="$line"
             continue
         fi
-        
+
         # Check if this is an exported declaration
         if is_exported "$line"; then
             total_exported=$((total_exported + 1))
-            
+
             # Extract the identifier name for reporting
             identifier=$(echo "$line" | sed -E 's/^(func|type|const|var)[[:space:]]*(\([^)]*\))?[[:space:]]*([A-Z][a-zA-Z0-9_]*).*/\3/')
-            
+
             if has_doc_comment "$prev_line"; then
                 documented=$((documented + 1))
                 echo -e "${GREEN}  ✅ $identifier (line $line_num)${NC}"
@@ -91,7 +91,7 @@ for file in $FILES; do
                 echo -e "${YELLOW}     Declaration: $line${NC}"
             fi
         fi
-        
+
         prev_line="$line"
     done < "$file"
 done
@@ -125,7 +125,7 @@ if [ $violations_found -gt 0 ]; then
     echo
     echo -e "   // Configure sets up the provider with given configuration"
     echo -e "   func (p *MyProvider) Configure(ctx context.Context, config map[string]interface{}) error {"
-    
+
     if [ $coverage -lt $MIN_COVERAGE ]; then
         echo
         echo -e "${RED}Coverage ($coverage%) is below minimum threshold ($MIN_COVERAGE%)${NC}"
