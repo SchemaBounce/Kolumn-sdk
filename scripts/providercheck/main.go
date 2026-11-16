@@ -13,19 +13,29 @@
 //     core/provider.go and README.md (Configure, Schema, CallFunction, Close
 //     with their current signatures).
 //   - Every named type that claims to be a provider must implement
-//     core.Provider. A type claims it when its method set has CallFunction
-//     with core.Provider's exact signature (the unified dispatch entry point),
-//     or has all four method names (a provider with a wrong signature).
-//     Assignments such as `var _ core.Provider = (*T)(nil)` are already
+//     core.Provider. A type claims it when its method set has a CallFunction
+//     method (any signature: the unified dispatch entry point) or at least
+//     two of the four method names.
+//   - Exception: a type that implements sdktesting.SchemaProvider is a
+//     schema-testing provider. That interface's Schema() returns
+//     *sdktesting.ProviderSchema, so no type can implement both it and
+//     core.Provider; such types are reported as skipped, not checked.
+//   - Assignments such as `var _ core.Provider = (*T)(nil)` are already
 //     enforced by the compiler; a package that does not type-check fails here.
 //
 // schemas:
 //   - The struct core.Provider.Schema() returns must have the core
 //     compatibility fields with their JSON names.
-//   - Every composite literal of that struct in non-test code must set Name
-//     and Version (helpers/validation.ValidateSchema rejects a schema without
-//     them), and every string literal in its SupportedFunctions must be a
-//     function the unified dispatcher accepts.
+//   - A keyed literal of that struct that is returned directly
+//     (`return &core.Schema{...}`) must set Name and Version
+//     (helpers/validation.ValidateSchema rejects a schema without them).
+//     Literals stored in a variable are not checked, since fields can be
+//     set after construction.
+//   - Every function name given to a SupportedFunctions field must be one
+//     core.UnifiedDispatcher.Dispatch accepts (read from its allowedFunctions
+//     map in the core sources). Names are followed through literals, append
+//     calls and local or package variables in the same package; values
+//     produced by other function calls are not followed.
 //
 // It uses only the standard library: `go list -export` builds the packages
 // and the type information comes from the compiler's export data.
@@ -70,17 +80,7 @@ var schemaFields = map[string]string{
 	"ConfigSchema":       "config_schema",
 }
 
-// dispatchFunctions are the function names core.UnifiedDispatcher.Dispatch
-// accepts (core/provider.go).
-var dispatchFunctions = map[string]bool{
-	"CreateResource":    true,
-	"ReadResource":      true,
-	"UpdateResource":    true,
-	"DeleteResource":    true,
-	"DiscoverResources": true,
-	"DiscoverDatabase":  true,
-	"Ping":              true,
-}
+const testingPath = "github.com/schemabounce/kolumn/sdk/testing"
 
 type listedPackage struct {
 	ImportPath string
@@ -93,6 +93,7 @@ type listedPackage struct {
 
 type checker struct {
 	fset     *token.FileSet
+	all      map[string]listedPackage // every listed package, by import path
 	lookup   importer.Lookup
 	imp      types.ImporterFrom // shared importer for the schema checks
 	provider *types.Interface   // core.Provider as loaded by imp
@@ -112,17 +113,21 @@ func (c *checker) newImporter() types.ImporterFrom {
 // importers are never identical, so a package is always compared with the
 // core.Provider its own importer loaded.
 func loadProvider(imp types.ImporterFrom) (*types.Interface, error) {
-	core, err := imp.ImportFrom(corePath, ".", 0)
+	return loadInterface(imp, corePath, "Provider")
+}
+
+func loadInterface(imp types.ImporterFrom, path, name string) (*types.Interface, error) {
+	pkg, err := imp.ImportFrom(path, ".", 0)
 	if err != nil {
-		return nil, fmt.Errorf("type-checking %s: %w", corePath, err)
+		return nil, fmt.Errorf("type-checking %s: %w", path, err)
 	}
-	obj := core.Scope().Lookup("Provider")
+	obj := pkg.Scope().Lookup(name)
 	if obj == nil {
-		return nil, fmt.Errorf("%s.Provider not found", corePath)
+		return nil, fmt.Errorf("%s.%s not found", path, name)
 	}
 	iface, ok := obj.Type().Underlying().(*types.Interface)
 	if !ok {
-		return nil, fmt.Errorf("%s.Provider is not an interface", corePath)
+		return nil, fmt.Errorf("%s.%s is not an interface", path, name)
 	}
 	return iface, nil
 }
@@ -170,7 +175,7 @@ func main() {
 }
 
 func checkModule(mode, dir string) ([]string, error) {
-	pkgs, exports, err := listPackages()
+	pkgs, all, exports, err := listPackages()
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +187,7 @@ func checkModule(mode, dir string) ([]string, error) {
 		}
 		return os.Open(file)
 	}
-	c := &checker{fset: fset, lookup: lookup}
+	c := &checker{fset: fset, all: all, lookup: lookup}
 	c.imp = c.newImporter()
 	if c.provider, err = loadProvider(c.imp); err != nil {
 		return nil, err
@@ -202,9 +207,13 @@ func checkModule(mode, dir string) ([]string, error) {
 		if schema == nil {
 			break
 		}
+		dispatch, err := c.dispatchFunctions()
+		if err != nil {
+			return nil, err
+		}
 		literals := 0
 		for _, p := range pkgs {
-			n, err := c.checkSchemaLiterals(p, schema)
+			n, err := c.checkSchemaLiterals(p, schema, dispatch)
 			if err != nil {
 				return nil, err
 			}
@@ -219,23 +228,25 @@ func checkModule(mode, dir string) ([]string, error) {
 // every package they depend on, plus core itself (a module that does not
 // import core is still checked against it). `go list -export` compiles the
 // packages, so a package that does not build fails here.
-func listPackages() ([]listedPackage, map[string]string, error) {
+func listPackages() ([]listedPackage, map[string]listedPackage, map[string]string, error) {
 	cmd := exec.Command("go", "list", "-e=false", "-export", "-deps",
-		"-json=ImportPath,Dir,GoFiles,Export,DepOnly,Module", "./...", corePath)
+		"-json=ImportPath,Dir,GoFiles,Export,DepOnly,Module", "./...", corePath, testingPath)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, nil, fmt.Errorf("go list: %v: %s", err, stderr.String())
+		return nil, nil, nil, fmt.Errorf("go list: %v: %s", err, stderr.String())
 	}
 	var pkgs []listedPackage
+	all := map[string]listedPackage{}
 	exports := map[string]string{}
 	dec := json.NewDecoder(bytes.NewReader(out))
 	for dec.More() {
 		var p listedPackage
 		if err := dec.Decode(&p); err != nil {
-			return nil, nil, fmt.Errorf("decoding go list output: %w", err)
+			return nil, nil, nil, fmt.Errorf("decoding go list output: %w", err)
 		}
+		all[p.ImportPath] = p
 		if p.Export != "" {
 			exports[p.ImportPath] = p.Export
 		}
@@ -243,7 +254,7 @@ func listPackages() ([]listedPackage, map[string]string, error) {
 			pkgs = append(pkgs, p)
 		}
 	}
-	return pkgs, exports, nil
+	return pkgs, all, exports, nil
 }
 
 func (c *checker) report(pos token.Pos, format string, args ...any) {
@@ -310,20 +321,20 @@ func (c *checker) checkContract() {
 	}
 }
 
-// claimsProvider reports whether a type presents itself as a core.Provider.
+// claimsProvider reports whether a type presents itself as a core.Provider:
+// it has a CallFunction method under any signature, or at least two of the
+// interface's method names.
 func claimsProvider(mset *types.MethodSet, provider *types.Interface) bool {
-	call := provider.Method(indexOf(provider, "CallFunction"))
-	if sel := mset.Lookup(nil, "CallFunction"); sel != nil {
-		if types.Identical(sel.Type(), call.Type()) {
-			return true
-		}
+	if mset.Lookup(nil, "CallFunction") != nil {
+		return true
 	}
+	found := 0
 	for i := 0; i < provider.NumMethods(); i++ {
-		if mset.Lookup(nil, provider.Method(i).Name()) == nil {
-			return false
+		if mset.Lookup(nil, provider.Method(i).Name()) != nil {
+			found++
 		}
 	}
-	return true
+	return found >= 2
 }
 
 func indexOf(iface *types.Interface, name string) int {
@@ -338,6 +349,10 @@ func indexOf(iface *types.Interface, name string) int {
 func (c *checker) checkImplementations(p listedPackage) error {
 	imp := c.newImporter()
 	provider, err := loadProvider(imp)
+	if err != nil {
+		return err
+	}
+	schemaProvider, err := loadInterface(imp, testingPath, "SchemaProvider")
 	if err != nil {
 		return err
 	}
@@ -364,6 +379,10 @@ func (c *checker) checkImplementations(p listedPackage) error {
 		}
 		if types.Implements(ptr, provider) {
 			fmt.Printf("  ok   %s.%s implements core.Provider\n", p.ImportPath, name)
+			continue
+		}
+		if types.Implements(ptr, schemaProvider) {
+			fmt.Printf("  skip %s.%s implements sdktesting.SchemaProvider, which cannot also be a core.Provider\n", p.ImportPath, name)
 			continue
 		}
 		m, wrongType := types.MissingMethod(ptr, provider, true)
@@ -428,9 +447,59 @@ func sortedKeys(m map[string]string) []string {
 	return keys
 }
 
-// checkSchemaLiterals checks every composite literal of the schema type in
-// one package and returns how many it found.
-func (c *checker) checkSchemaLiterals(p listedPackage, schema *types.Named) (int, error) {
+// dispatchFunctions reads the function names core.UnifiedDispatcher.Dispatch
+// accepts from the allowedFunctions map literal in the core sources, so the
+// checker never keeps a second copy of that list.
+func (c *checker) dispatchFunctions() (map[string]bool, error) {
+	core, ok := c.all[corePath]
+	if !ok {
+		return nil, fmt.Errorf("%s not listed", corePath)
+	}
+	fset := token.NewFileSet()
+	for _, name := range core.GoFiles {
+		f, err := parser.ParseFile(fset, filepath.Join(core.Dir, name), nil, 0)
+		if err != nil {
+			return nil, err
+		}
+		for _, decl := range f.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Name.Name != "Dispatch" || fn.Recv == nil || fn.Body == nil {
+				continue
+			}
+			var names map[string]bool
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				as, ok := n.(*ast.AssignStmt)
+				if !ok || len(as.Lhs) != 1 || len(as.Rhs) != 1 {
+					return true
+				}
+				if id, ok := as.Lhs[0].(*ast.Ident); !ok || id.Name != "allowedFunctions" {
+					return true
+				}
+				lit, ok := as.Rhs[0].(*ast.CompositeLit)
+				if !ok {
+					return true
+				}
+				names = map[string]bool{}
+				for _, elt := range lit.Elts {
+					if kv, ok := elt.(*ast.KeyValueExpr); ok {
+						if bl, ok := kv.Key.(*ast.BasicLit); ok && bl.Kind == token.STRING {
+							names[strings.Trim(bl.Value, "`\"")] = true
+						}
+					}
+				}
+				return false
+			})
+			if len(names) > 0 {
+				return names, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("allowedFunctions map not found in %s Dispatch", corePath)
+}
+
+// checkSchemaLiterals checks the schema literals and SupportedFunctions
+// values in one package and returns how many schema literals it found.
+func (c *checker) checkSchemaLiterals(p listedPackage, schema *types.Named, dispatch map[string]bool) (int, error) {
 	var files []*ast.File
 	for _, name := range p.GoFiles {
 		f, err := parser.ParseFile(c.fset, filepath.Join(p.Dir, name), nil, 0)
@@ -439,13 +508,20 @@ func (c *checker) checkSchemaLiterals(p listedPackage, schema *types.Named) (int
 		}
 		files = append(files, f)
 	}
-	info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{}}
+	info := &types.Info{
+		Types: map[ast.Expr]types.TypeAndValue{},
+		Defs:  map[*ast.Ident]types.Object{},
+		Uses:  map[*ast.Ident]types.Object{},
+	}
 	conf := types.Config{Importer: c.imp}
 	if _, err := conf.Check(p.ImportPath, c.fset, files, info); err != nil {
 		return 0, fmt.Errorf("type-checking %s: %w", p.ImportPath, err)
 	}
 
 	isSchema := func(t types.Type) bool {
+		if ptr, ok := t.(*types.Pointer); ok {
+			t = ptr.Elem()
+		}
 		n, ok := t.(*types.Named)
 		// Compare by path and name: the core package checked here and the
 		// one the importer loaded are distinct objects.
@@ -453,40 +529,134 @@ func (c *checker) checkSchemaLiterals(p listedPackage, schema *types.Named) (int
 			n.Obj().Name() == schema.Obj().Name()
 	}
 
+	// Every value assigned to each variable in the package, so function
+	// names can be followed through variables.
+	values := map[types.Object][]ast.Expr{}
+	objOf := func(id *ast.Ident) types.Object {
+		if obj := info.Defs[id]; obj != nil {
+			return obj
+		}
+		return info.Uses[id]
+	}
+	// Values given to a SupportedFunctions field.
+	var supported []ast.Expr
 	count := 0
+
 	for _, f := range files {
 		ast.Inspect(f, func(n ast.Node) bool {
-			lit, ok := n.(*ast.CompositeLit)
-			if !ok || !isSchema(info.TypeOf(lit)) {
-				return true
-			}
-			count++
-			set := map[string]ast.Expr{}
-			for _, elt := range lit.Elts {
-				if kv, ok := elt.(*ast.KeyValueExpr); ok {
-					if id, ok := kv.Key.(*ast.Ident); ok {
-						set[id.Name] = kv.Value
+			switch n := n.(type) {
+			case *ast.AssignStmt:
+				if len(n.Lhs) == len(n.Rhs) {
+					for i, lhs := range n.Lhs {
+						switch l := lhs.(type) {
+						case *ast.Ident:
+							if obj := objOf(l); obj != nil {
+								values[obj] = append(values[obj], n.Rhs[i])
+							}
+						case *ast.SelectorExpr:
+							if l.Sel.Name == "SupportedFunctions" && isSchema(info.TypeOf(l.X)) {
+								supported = append(supported, n.Rhs[i])
+							}
+						}
 					}
 				}
-			}
-			for _, required := range []string{"Name", "Version"} {
-				if _, ok := set[required]; !ok {
-					c.report(lit.Pos(), "%s literal does not set %s", schema.Obj().Name(), required)
+			case *ast.ValueSpec:
+				if len(n.Names) == len(n.Values) {
+					for i, id := range n.Names {
+						if obj := info.Defs[id]; obj != nil {
+							values[obj] = append(values[obj], n.Values[i])
+						}
+					}
 				}
-			}
-			if fns, ok := set["SupportedFunctions"].(*ast.CompositeLit); ok {
-				for _, e := range fns.Elts {
-					tv := info.Types[e]
-					if tv.Value == nil || tv.Value.Kind() != constant.String {
+			case *ast.ReturnStmt:
+				for _, r := range n.Results {
+					if u, ok := r.(*ast.UnaryExpr); ok && u.Op == token.AND {
+						r = u.X
+					}
+					lit, ok := r.(*ast.CompositeLit)
+					if !ok || !isSchema(info.TypeOf(lit)) {
 						continue
 					}
-					if fn := constant.StringVal(tv.Value); !dispatchFunctions[fn] {
-						c.report(e.Pos(), "SupportedFunctions lists %q, which the unified dispatcher does not accept", fn)
+					set, keyed := keyedFields(lit)
+					if !keyed {
+						continue
 					}
+					for _, required := range []string{"Name", "Version"} {
+						if _, ok := set[required]; !ok {
+							c.report(lit.Pos(), "returned %s literal does not set %s", schema.Obj().Name(), required)
+						}
+					}
+				}
+			case *ast.CompositeLit:
+				if !isSchema(info.TypeOf(n)) {
+					return true
+				}
+				count++
+				if set, _ := keyedFields(n); set["SupportedFunctions"] != nil {
+					supported = append(supported, set["SupportedFunctions"])
 				}
 			}
 			return true
 		})
 	}
+
+	seen := map[ast.Expr]bool{}
+	var names func(e ast.Expr)
+	names = func(e ast.Expr) {
+		if e == nil || seen[e] {
+			return
+		}
+		seen[e] = true
+		check := func(e ast.Expr) {
+			if tv := info.Types[e]; tv.Value != nil && tv.Value.Kind() == constant.String {
+				if fn := constant.StringVal(tv.Value); !dispatch[fn] {
+					c.report(e.Pos(), "SupportedFunctions lists %q, which the unified dispatcher does not accept", fn)
+				}
+				return
+			}
+			names(e)
+		}
+		switch e := e.(type) {
+		case *ast.ParenExpr:
+			names(e.X)
+		case *ast.CompositeLit:
+			for _, elt := range e.Elts {
+				check(elt)
+			}
+		case *ast.CallExpr:
+			// append(base, names...): follow the base and check the names.
+			if id, ok := e.Fun.(*ast.Ident); ok && id.Name == "append" && len(e.Args) > 0 {
+				names(e.Args[0])
+				for _, a := range e.Args[1:] {
+					check(a)
+				}
+			}
+		case *ast.Ident:
+			if obj := info.Uses[e]; obj != nil {
+				for _, v := range values[obj] {
+					names(v)
+				}
+			}
+		}
+	}
+	for _, e := range supported {
+		names(e)
+	}
 	return count, nil
+}
+
+// keyedFields returns a literal's keyed fields, and false when the literal is
+// positional (it then sets every field).
+func keyedFields(lit *ast.CompositeLit) (map[string]ast.Expr, bool) {
+	set := map[string]ast.Expr{}
+	for _, elt := range lit.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			return nil, false
+		}
+		if id, ok := kv.Key.(*ast.Ident); ok {
+			set[id.Name] = kv.Value
+		}
+	}
+	return set, true
 }
