@@ -257,7 +257,7 @@ func AppendExamplesFromDir(docs *UniversalProviderDocumentation, dir string) err
 		}
 		lower := strings.ToLower(d.Name())
 		if strings.HasSuffix(lower, ".kl") || strings.HasSuffix(lower, ".hcl") {
-			b, err := os.ReadFile(path)
+			b, err := os.ReadFile(path) // #nosec G304 G122 -- reads example files under the dir the caller passes in, by design; a symlink race needs write access to that tree, and the contents are only copied into documentation
 			if err != nil {
 				return nil
 			}
