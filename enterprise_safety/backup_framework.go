@@ -3,7 +3,7 @@ package enterprise_safety
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/md5" // #nosec G501 -- md5 is used only for the backup ID and metadata checksum, which are not security controls; see generateBackupID
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -143,6 +143,12 @@ func DefaultValidationRules() ValidationRules {
 
 // BackupObject backs up a database object with full integrity validation
 func (f *BackupIntegrityFramework) BackupObject(ctx context.Context, db *sql.DB, objRef ObjectReference) (*BackupObject, error) {
+	// The names end up in SQL text: in the queries below and in the
+	// definition that RestoreObject executes. Reject unsafe names first.
+	if _, err := qualifiedSQLName(objectQualifier(f.ProviderType, objRef.SchemaName, objRef.DatabaseName), objRef.Name); err != nil {
+		return nil, fmt.Errorf("invalid object reference: %w", err)
+	}
+
 	backup := &BackupObject{
 		ID:              generateBackupID(objRef),
 		ProviderType:    f.ProviderType,
@@ -464,7 +470,11 @@ func (f *BackupIntegrityFramework) getPostgreSQLDefinition(db *sql.DB, objRef Ob
 		if err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("CREATE TABLE %s.%s (%s);", objRef.SchemaName, objRef.Name, definition.String), nil
+		name, err := qualifiedSQLName(objRef.SchemaName, objRef.Name)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("CREATE TABLE %s (%s);", name, definition.String), nil
 
 	case "view":
 		query := `SELECT 'CREATE VIEW ' || schemaname||'.'||viewname || ' AS ' || definition as full_definition
@@ -482,9 +492,13 @@ func (f *BackupIntegrityFramework) getPostgreSQLDefinition(db *sql.DB, objRef Ob
 func (f *BackupIntegrityFramework) getMySQLDefinition(db *sql.DB, objRef ObjectReference) (string, error) {
 	switch objRef.Type {
 	case "table":
-		query := fmt.Sprintf("SHOW CREATE TABLE %s.%s", objRef.DatabaseName, objRef.Name)
+		name, err := qualifiedSQLName(objRef.DatabaseName, objRef.Name)
+		if err != nil {
+			return "", err
+		}
+		query := fmt.Sprintf("SHOW CREATE TABLE %s", name) // #nosec G201 -- name is validated by qualifiedSQLName
 		var tableName, definition string
-		err := db.QueryRow(query).Scan(&tableName, &definition)
+		err = db.QueryRow(query).Scan(&tableName, &definition)
 		return definition, err
 
 	case "view":
@@ -506,17 +520,23 @@ func (f *BackupIntegrityFramework) getTableDataInfo(db *sql.DB, objRef ObjectRef
 
 	switch f.ProviderType {
 	case "postgres":
+		name, err := qualifiedSQLName(objRef.SchemaName, objRef.Name)
+		if err != nil {
+			return "", 0, 0, err
+		}
+
 		// Get row count
-		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s.%s", objRef.SchemaName, objRef.Name)
-		err := db.QueryRow(countQuery).Scan(&rowCount)
+		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s", name) // #nosec G201 -- name is validated by qualifiedSQLName
+		err = db.QueryRow(countQuery).Scan(&rowCount)
 		if err != nil {
 			return "", 0, 0, err
 		}
 
 		// Calculate checksum
+		// #nosec G201 -- objRef.Name and name are validated by qualifiedSQLName
 		checksumQuery := fmt.Sprintf(`
 			SELECT md5(string_agg(md5(CAST((t.*) AS text)), '' ORDER BY %s.ctid))
-			FROM %s.%s t`, objRef.Name, objRef.SchemaName, objRef.Name)
+			FROM %s t`, objRef.Name, name)
 
 		var checksumResult sql.NullString
 		err = db.QueryRow(checksumQuery).Scan(&checksumResult)
@@ -525,15 +545,20 @@ func (f *BackupIntegrityFramework) getTableDataInfo(db *sql.DB, objRef ObjectRef
 		}
 
 	case "mysql":
+		name, err := qualifiedSQLName(objRef.DatabaseName, objRef.Name)
+		if err != nil {
+			return "", 0, 0, err
+		}
+
 		// Get row count
-		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s.%s", objRef.DatabaseName, objRef.Name)
-		err := db.QueryRow(countQuery).Scan(&rowCount)
+		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s", name) // #nosec G201 -- name is validated by qualifiedSQLName
+		err = db.QueryRow(countQuery).Scan(&rowCount)
 		if err != nil {
 			return "", 0, 0, err
 		}
 
 		// Calculate checksum
-		checksumQuery := fmt.Sprintf("CHECKSUM TABLE %s.%s", objRef.DatabaseName, objRef.Name)
+		checksumQuery := fmt.Sprintf("CHECKSUM TABLE %s", name) // #nosec G201 -- name is validated by qualifiedSQLName
 		var tableName, checksumResult sql.NullString
 		err = db.QueryRow(checksumQuery).Scan(&tableName, &checksumResult)
 		if err == nil && checksumResult.Valid {
@@ -553,8 +578,13 @@ func (f *BackupIntegrityFramework) getObjectDependencies(db *sql.DB, objRef Obje
 	return []string{}, nil
 }
 
+// calculateMetadataChecksum fingerprints the backed-up definition. The value
+// is recorded in the backup file; nothing in this package verifies it. It is
+// unkeyed and stored next to the data it covers, so it could not be a tamper
+// check whatever the hash. It stays md5 so a backup of an unchanged object
+// records the same value it did before.
 func (f *BackupIntegrityFramework) calculateMetadataChecksum(backup *BackupObject) string {
-	hasher := md5.New()
+	hasher := md5.New() // #nosec G401 -- non-security fingerprint persisted in backup files; see the function comment
 	hasher.Write([]byte(backup.Definition))
 	hasher.Write([]byte(backup.ObjectType))
 	hasher.Write([]byte(backup.ObjectName))
@@ -566,11 +596,16 @@ func (f *BackupIntegrityFramework) validateBackup(backup *BackupObject) {
 }
 
 func (f *BackupIntegrityFramework) saveBackupToDisk(backup *BackupObject) error {
-	if err := os.MkdirAll(f.BackupDirectory, 0755); err != nil {
+	filename := fmt.Sprintf("%s_%s_%s.json", backup.ProviderType, backup.ObjectType, backup.ObjectName)
+	if err := validateBackupFileName(filename); err != nil {
 		return err
 	}
 
-	filename := fmt.Sprintf("%s_%s_%s.json", backup.ProviderType, backup.ObjectType, backup.ObjectName)
+	// Backups hold object definitions; keep them private to the owning user.
+	if err := os.MkdirAll(f.BackupDirectory, 0o700); err != nil {
+		return err
+	}
+
 	filepath := filepath.Join(f.BackupDirectory, filename)
 
 	data, err := json.MarshalIndent(backup, "", "  ")
@@ -578,7 +613,7 @@ func (f *BackupIntegrityFramework) saveBackupToDisk(backup *BackupObject) error 
 		return err
 	}
 
-	return os.WriteFile(filepath, data, 0644)
+	return os.WriteFile(filepath, data, 0o600)
 }
 
 func (f *BackupIntegrityFramework) loadAllBackups() ([]*BackupObject, error) {
@@ -592,7 +627,7 @@ func (f *BackupIntegrityFramework) loadAllBackups() ([]*BackupObject, error) {
 	for _, file := range files {
 		if strings.HasSuffix(file.Name(), ".json") {
 			filepath := filepath.Join(f.BackupDirectory, file.Name())
-			data, err := os.ReadFile(filepath)
+			data, err := os.ReadFile(filepath) // #nosec G304 -- file.Name() is a single entry returned by os.ReadDir(f.BackupDirectory), so the path stays in that directory
 			if err != nil {
 				continue
 			}
@@ -641,10 +676,14 @@ func (f *BackupIntegrityFramework) countRelatedObjects(db *sql.DB, objects []Obj
 		var query string
 
 		switch f.ProviderType {
-		case "postgres":
-			query = fmt.Sprintf("SELECT COUNT(*) FROM %s.%s", obj.SchemaName, obj.Name)
-		case "mysql":
-			query = fmt.Sprintf("SELECT COUNT(*) FROM %s.%s", obj.DatabaseName, obj.Name)
+		case "postgres", "mysql":
+			name, err := qualifiedSQLName(objectQualifier(f.ProviderType, obj.SchemaName, obj.DatabaseName), obj.Name)
+			if err != nil {
+				// An unsafe name is never queried; count it as 0, as a failed query is.
+				counts[i] = 0
+				continue
+			}
+			query = fmt.Sprintf("SELECT COUNT(*) FROM %s", name) // #nosec G201 -- name is validated by qualifiedSQLName
 		}
 
 		err := db.QueryRow(query).Scan(&count)
@@ -662,19 +701,20 @@ func (f *BackupIntegrityFramework) deleteObject(db *sql.DB, objRef ObjectReferen
 	var query string
 
 	switch f.ProviderType {
-	case "postgres":
-		switch objRef.Type {
-		case "table":
-			query = fmt.Sprintf("DROP TABLE IF EXISTS %s.%s CASCADE", objRef.SchemaName, objRef.Name)
-		case "view":
-			query = fmt.Sprintf("DROP VIEW IF EXISTS %s.%s CASCADE", objRef.SchemaName, objRef.Name)
+	case "postgres", "mysql":
+		name, err := qualifiedSQLName(objectQualifier(f.ProviderType, objRef.SchemaName, objRef.DatabaseName), objRef.Name)
+		if err != nil {
+			return err
 		}
-	case "mysql":
+		cascade := ""
+		if f.ProviderType == "postgres" {
+			cascade = " CASCADE"
+		}
 		switch objRef.Type {
 		case "table":
-			query = fmt.Sprintf("DROP TABLE IF EXISTS %s.%s", objRef.DatabaseName, objRef.Name)
+			query = fmt.Sprintf("DROP TABLE IF EXISTS %s%s", name, cascade)
 		case "view":
-			query = fmt.Sprintf("DROP VIEW IF EXISTS %s.%s", objRef.DatabaseName, objRef.Name)
+			query = fmt.Sprintf("DROP VIEW IF EXISTS %s%s", name, cascade)
 		}
 	}
 
@@ -714,8 +754,12 @@ func (f *BackupIntegrityFramework) generateRecommendations(report IntegrityRepor
 	return recommendations
 }
 
+// generateBackupID derives a short, stable ID for a backed-up object. It is
+// an identifier, not a security control: nothing is authenticated or kept
+// secret with it. It stays md5 so an object keeps the ID that earlier
+// backups recorded for it.
 func generateBackupID(objRef ObjectReference) string {
-	hasher := md5.New()
+	hasher := md5.New() // #nosec G401 -- non-security identifier persisted in backup files; see the function comment
 	hasher.Write([]byte(fmt.Sprintf("%s:%s:%s:%s", objRef.Type, objRef.DatabaseName, objRef.SchemaName, objRef.Name)))
 	return hex.EncodeToString(hasher.Sum(nil))[:12]
 }
