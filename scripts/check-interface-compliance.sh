@@ -5,16 +5,19 @@
 # - core.Provider must still be the 4-method contract (Configure, Schema,
 #   CallFunction, Close with their current signatures).
 # - Every type that claims to be a provider must implement core.Provider. A
-#   type claims it when it has a CallFunction method (any signature), or at
-#   least two of the four method names with Configure or Schema matching
-#   core.Provider exactly. Types explicitly declared with
-#   `var _ sdktesting.SchemaProvider = (*T)(nil)` are skipped (listed in the
-#   output): that interface cannot be satisfied together with core.Provider.
+#   type claims it when it has a CallFunction method (any signature), at
+#   least three of the four method names (any signatures), or two of them
+#   with Configure or Schema matching core.Provider exactly. Types
+#   explicitly declared with `var _ sdktesting.SchemaProvider = (*T)(nil)`
+#   are skipped (listed in the output): that interface cannot be satisfied
+#   together with core.Provider.
 #
 # The rules live in scripts/providercheck/main.go, which type-checks every
 # module in the repository (the root SDK module and each nested example
 # module). Interfaces that merely have "Provider" in their name, and structs
 # that merely have a Schema method, are not providers and are not checked.
+# Only non-test files are checked: types declared in _test.go files are not
+# type-checked.
 #
 
 set -euo pipefail

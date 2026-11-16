@@ -6,16 +6,18 @@
 # - The schema struct must keep the core compatibility fields
 #   (SupportedFunctions, ResourceTypes, ConfigSchema) with their JSON names.
 # - A keyed literal of it that is returned directly must set Name and
-#   Version (a literal stored in a variable can be filled in afterwards and
-#   is not checked).
-# - Every function name given to SupportedFunctions (in a literal, a field
-#   assignment, an append or a variable in the same package) must be one
-#   core.UnifiedDispatcher.Dispatch accepts. Values returned by other
-#   function calls are not followed.
+#   Version. Not checked: a literal stored in a variable (it can be filled
+#   in afterwards), and a return that also returns a non-nil error
+#   (`return &core.Schema{}, err`).
+# - Every function name given to SupportedFunctions (in a literal, a
+#   constant, a field assignment, an append, or a string or slice variable
+#   in the same package) must be one core.UnifiedDispatcher.Dispatch
+#   accepts. Values returned by other function calls are not followed.
 #
 # The rules live in scripts/providercheck/main.go, which type-checks every
 # module in the repository. Other structs whose name contains "Schema" are not
-# provider schemas and are not checked.
+# provider schemas and are not checked. Only non-test files are checked:
+# _test.go files are not type-checked.
 #
 
 set -euo pipefail

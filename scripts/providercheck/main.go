@@ -15,9 +15,10 @@
 //   - Every named type that claims to be a provider must implement
 //     core.Provider, and every missing or mismatched method is reported. A
 //     type claims it when its method set has a CallFunction method (any
-//     signature: the unified dispatch entry point), or has at least two of
-//     the four method names and its Configure or Schema has core.Provider's
-//     exact signature. (Close() error alone is too common to count.)
+//     signature: the unified dispatch entry point), at least three of the
+//     four method names under any signatures, or two of them with its
+//     Configure or Schema matching core.Provider's exact signature. (Close()
+//     error alone is too common to count.)
 //   - Exception: a type the code explicitly declares as a schema-testing
 //     provider with `var _ sdktesting.SchemaProvider = (*T)(nil)`. That
 //     interface's Schema() returns *sdktesting.ProviderSchema, so no type can
@@ -33,12 +34,17 @@
 //     (`return &core.Schema{...}`) must set Name and Version
 //     (helpers/validation.ValidateSchema rejects a schema without them).
 //     Literals stored in a variable are not checked, since fields can be
-//     set after construction.
+//     set after construction, and neither is a return that also returns a
+//     non-nil error (`return &core.Schema{}, err`).
 //   - Every function name given to a SupportedFunctions field must be one
 //     core.UnifiedDispatcher.Dispatch accepts (read from its allowedFunctions
-//     map in the core sources). Names are followed through literals, append
-//     calls and local or package variables in the same package; values
-//     produced by other function calls are not followed.
+//     map in the core sources). Names are followed through string and
+//     slice literals, constants, append calls, and local or package string
+//     and slice variables in the same package; values produced by other
+//     function calls are not followed.
+//
+// Only a package's non-test files are checked: _test.go files are neither
+// type-checked nor searched.
 //
 // It uses only the standard library: `go list -export` builds the packages
 // and the type information comes from the compiler's export data.
@@ -325,9 +331,9 @@ func (c *checker) checkContract() {
 }
 
 // claimsProvider reports whether a type presents itself as a core.Provider:
-// it has a CallFunction method under any signature, or at least two of the
-// interface's method names with Configure or Schema matching core.Provider
-// exactly.
+// it has a CallFunction method under any signature, at least three of the
+// interface's method names under any signatures, or two of them with
+// Configure or Schema matching core.Provider exactly.
 func claimsProvider(mset *types.MethodSet, provider *types.Interface) bool {
 	if mset.Lookup(nil, "CallFunction") != nil {
 		return true
@@ -344,7 +350,7 @@ func claimsProvider(mset *types.MethodSet, provider *types.Interface) bool {
 			exact = true
 		}
 	}
-	return found >= 2 && exact
+	return found >= 3 || (found >= 2 && exact)
 }
 
 // declaredSchemaProviders returns the names of types a package explicitly
@@ -637,6 +643,11 @@ func (c *checker) checkSchemaLiterals(p listedPackage, schema *types.Named, disp
 					}
 				}
 			case *ast.ReturnStmt:
+				// An error path (`return &core.Schema{}, err`) need not
+				// return a complete schema.
+				if returnsError(info, n) {
+					return true
+				}
 				for _, r := range n.Results {
 					if u, ok := r.(*ast.UnaryExpr); ok && u.Op == token.AND {
 						r = u.X
@@ -700,9 +711,12 @@ func (c *checker) checkSchemaLiterals(p listedPackage, schema *types.Named, disp
 				}
 			}
 		case *ast.Ident:
+			// A variable: check each value assigned to it, so a string
+			// variable is checked like a literal and a slice variable is
+			// followed.
 			if obj := info.Uses[e]; obj != nil {
 				for _, v := range values[obj] {
-					names(v)
+					check(v)
 				}
 			}
 		}
@@ -711,6 +725,22 @@ func (c *checker) checkSchemaLiterals(p listedPackage, schema *types.Named, disp
 		names(e)
 	}
 	return count, nil
+}
+
+// returnsError reports whether a return statement returns a non-nil error
+// value next to its other results.
+func returnsError(info *types.Info, ret *ast.ReturnStmt) bool {
+	errType := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
+	for _, r := range ret.Results {
+		tv, ok := info.Types[r]
+		if !ok || tv.IsNil() || tv.Type == nil {
+			continue
+		}
+		if types.Implements(tv.Type, errType) {
+			return true
+		}
+	}
+	return false
 }
 
 // keyedFields returns a literal's keyed fields, and false when the literal is
