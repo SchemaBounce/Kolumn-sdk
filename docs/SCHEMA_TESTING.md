@@ -23,20 +23,20 @@ package main
 import (
 	"testing"
 	"github.com/stretchr/testify/require"
-	"github.com/schemabounce/kolumn-sdk/testing"
+	sdktesting "github.com/schemabounce/kolumn/sdk/testing"
 )
 
 func TestSchemaImplementationConsistency(t *testing.T) {
 	provider := NewMyProvider() // Replace with your provider constructor
 	require.NotNil(t, provider)
 
-	config := &testing.SchemaTestConfig{
+	config := &sdktesting.SchemaTestConfig{
 		Provider: provider,
-		ExpectedConfigFields: map[string]testing.ConfigFieldExpectation{
+		ExpectedConfigFields: map[string]sdktesting.ConfigFieldExpectation{
 			"endpoint": {Required: false, FieldType: "string", Description: "API endpoint"},
 			"api_key":  {Required: false, FieldType: "string", Description: "API key"},
 		},
-		ExpectedResources: map[string]testing.ResourceExpectation{
+		ExpectedResources: map[string]sdktesting.ResourceExpectation{
 			"my_table": {
 				Operations:  []string{"create", "read", "update", "delete"},
 				Description: "Database table resource",
@@ -47,7 +47,7 @@ func TestSchemaImplementationConsistency(t *testing.T) {
 		},
 	}
 
-	testing.RunSchemaConsistencyTests(t, config)
+	sdktesting.RunSchemaConsistencyTests(t, config)
 }
 
 func TestSchemaConsistencyPreCommitHook(t *testing.T) {
@@ -81,7 +81,7 @@ pre-commit install
 
 ## Interface Requirements
 
-Your provider must implement the `testing.SchemaProvider` interface:
+Your provider must implement the `sdktesting.SchemaProvider` interface:
 
 ```go
 type SchemaProvider interface {
@@ -98,7 +98,7 @@ type SchemaProvider interface {
 Define all configuration fields that your `Configure()` method accepts:
 
 ```go
-ExpectedConfigFields: map[string]testing.ConfigFieldExpectation{
+ExpectedConfigFields: map[string]sdktesting.ConfigFieldExpectation{
 	"endpoint": {
 		Required:    false,
 		FieldType:   "string",
@@ -122,7 +122,7 @@ ExpectedConfigFields: map[string]testing.ConfigFieldExpectation{
 Define all resource types your provider supports:
 
 ```go
-ExpectedResources: map[string]testing.ResourceExpectation{
+ExpectedResources: map[string]sdktesting.ResourceExpectation{
 	"postgres_table": {
 		Operations:  []string{"create", "read", "update", "delete"},
 		Description: "PostgreSQL table",
@@ -157,10 +157,10 @@ type StateAdapter interface {
 }
 
 // In your test configuration
-config := &testing.SchemaTestConfig{
+config := &sdktesting.SchemaTestConfig{
 	Provider:     provider,
 	StateAdapter: stateAdapter, // Optional
-	ExpectedResources: map[string]testing.ResourceExpectation{
+	ExpectedResources: map[string]sdktesting.ResourceExpectation{
 		"my_table": {
 			StateAdapterMethod: "getTableSchema", // Method name in state adapter
 			Operations:         []string{"create", "read", "update", "delete"},
@@ -234,7 +234,7 @@ The tests use minimal test inputs. Consider adding integration tests that use re
 When making breaking changes to your schemas, consider versioning:
 
 ```go
-schema := &testing.ProviderSchema{
+schema := &sdktesting.ProviderSchema{
 	Name:    "my-provider",
 	Version: "2.0.0", // Increment for breaking changes
 	// ...
@@ -280,7 +280,7 @@ go test . -run TestSchemaConsistencyPreCommitHook -v
 If you don't have a state adapter, set it to `nil`:
 
 ```go
-config := &testing.SchemaTestConfig{
+config := &sdktesting.SchemaTestConfig{
 	Provider:     provider,
 	StateAdapter: nil, // No state adapter
 	// ... other config
