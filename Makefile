@@ -49,7 +49,7 @@ install-tools: ## Install required development tools
 	@echo -e "$(BLUE)Installing Go tools...$(NC)"
 	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	@go install mvdan.cc/gofumpt@latest
-	@go install github.com/securecodewarrior/github-action-add-sarif@latest || echo "gosec install skipped"
+	@go install github.com/securego/gosec/v2/cmd/gosec@latest
 	@go install golang.org/x/tools/cmd/goimports@latest
 	@go install github.com/go-critic/go-critic/cmd/gocritic@latest
 	@go install honnef.co/go/tools/cmd/staticcheck@latest
@@ -157,7 +157,7 @@ security: ## Run security checks
 		gosec -quiet ./...; \
 		echo -e "$(GREEN)✅ gosec security scan passed$(NC)"; \
 	else \
-		echo -e "$(YELLOW)⚠️  gosec not installed. Install with: go install github.com/securecodewarrior/github-action-add-sarif@latest$(NC)"; \
+		echo -e "$(YELLOW)⚠️  gosec not installed. Install with: go install github.com/securego/gosec/v2/cmd/gosec@latest$(NC)"; \
 	fi
 	@echo -e "$(BLUE)Running secret detection...$(NC)"
 	@if command -v detect-secrets >/dev/null 2>&1; then \

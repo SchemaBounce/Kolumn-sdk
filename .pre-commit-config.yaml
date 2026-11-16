@@ -59,24 +59,6 @@ repos:
       - id: golangci-lint
         name: Comprehensive Go linting (golangci-lint)
 
-  # Additional Go formatting with gofumpt (stricter than gofmt)
-  - repo: https://github.com/heschik/pre-commit-go-gofumpt
-    rev: v1.0.0
-    hooks:
-      - id: gofumpt
-        name: Format Go code (gofumpt - stricter)
-
-  # Security scanning
-  - repo: https://github.com/securecodewarrior/github-action-add-sarif
-    rev: v1.1.0
-    hooks:
-      - id: gosec
-        name: Go security checker (gosec)
-        language: golang
-        entry: gosec
-        args: ['-fmt=sarif', '-out=gosec-results.sarif', './...']
-        pass_filenames: false
-
   # Detect secrets and credentials
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.4.0
@@ -109,6 +91,29 @@ repos:
         language: system
         files: '\.go$|(^|/)go\.(mod|sum)$'
         pass_filenames: false
+
+      # gofumpt (stricter than gofmt). The previously pinned
+      # heschik/pre-commit-go-gofumpt repository does not exist, so this is a
+      # local hook running `gofumpt -l .`; it fails when gofumpt lists files.
+      # Prints SKIPPED (and passes) only when gofumpt is not installed.
+      - id: gofumpt
+        name: Format Go code (gofumpt - stricter)
+        entry: scripts/check-gofumpt.sh
+        language: script
+        files: \.go$
+        pass_filenames: false
+        verbose: true
+
+      # gosec security scanner, run as `make security` runs it. The previously
+      # pinned securecodewarrior/github-action-add-sarif repository does not
+      # exist. Prints SKIPPED (and passes) only when gosec is not installed.
+      - id: gosec
+        name: Go security checker (gosec)
+        entry: scripts/check-gosec.sh
+        language: script
+        files: '\.go$|(^|/)go\.(mod|sum)$|^scripts/check-gosec\.sh$'
+        pass_filenames: false
+        verbose: true
 
       # Banned terms detection (terraform references)
       - id: banned-terms
