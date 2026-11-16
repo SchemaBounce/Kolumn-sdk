@@ -20,7 +20,7 @@ total_files=0
 # Direct approach - check files one by one using find
 echo -e "${GREEN}Scanning for Go and Markdown files...${NC}"
 
-find . -name "*.go" -o -name "*.md" | while read -r file; do
+while IFS= read -r file; do
     # Skip excluded files
     case "$file" in
         */.git/*|*/vendor/*|./CLAUDE.md|./scripts/check-banned-terms.sh)
@@ -29,7 +29,7 @@ find . -name "*.go" -o -name "*.md" | while read -r file; do
     esac
     
     if [[ -f "$file" ]]; then
-        ((total_files++))
+        total_files=$((total_files + 1))
         echo -e "${GREEN}Checking file $total_files: $file${NC}"
         
         # Check for banned terms (case insensitive)
@@ -37,10 +37,10 @@ find . -name "*.go" -o -name "*.md" | while read -r file; do
             echo -e "${RED}❌ BANNED TERM FOUND in $file${NC}"
             echo -e "${YELLOW}   Matches:${NC}"
             grep -nHi "terraform" "$file" 2>/dev/null || true
-            ((violations_found++))
+            violations_found=$((violations_found + 1))
         fi
     fi
-done
+done < <(find . \( -name "*.go" -o -name "*.md" \) -type f)
 
 echo
 echo -e "${GREEN}📊 Scan Summary:${NC}"

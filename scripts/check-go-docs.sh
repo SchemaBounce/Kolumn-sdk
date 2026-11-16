@@ -67,7 +67,7 @@ for file in $FILES; do
     line_num=0
     
     while IFS= read -r line; do
-        ((line_num++))
+        line_num=$((line_num + 1))
         
         # Skip empty lines and build constraints
         if [[ -z "$line" ]] || [[ $line =~ ^//[[:space:]]*\+build ]] || [[ $line =~ ^//go: ]]; then
@@ -77,16 +77,16 @@ for file in $FILES; do
         
         # Check if this is an exported declaration
         if is_exported "$line"; then
-            ((total_exported++))
+            total_exported=$((total_exported + 1))
             
             # Extract the identifier name for reporting
             identifier=$(echo "$line" | sed -E 's/^(func|type|const|var)[[:space:]]*(\([^)]*\))?[[:space:]]*([A-Z][a-zA-Z0-9_]*).*/\3/')
             
             if has_doc_comment "$prev_line"; then
-                ((documented++))
+                documented=$((documented + 1))
                 echo -e "${GREEN}  ✅ $identifier (line $line_num)${NC}"
             else
-                ((violations_found++))
+                violations_found=$((violations_found + 1))
                 echo -e "${RED}  ❌ $identifier (line $line_num) - Missing documentation${NC}"
                 echo -e "${YELLOW}     Declaration: $line${NC}"
             fi

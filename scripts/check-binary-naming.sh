@@ -54,9 +54,9 @@ check_binary_names_in_file() {
                 else
                     echo -e "${RED}      ❌ Invalid binary name: $binary_name${NC}"
                     echo -e "${YELLOW}         Must match pattern: kolumn-provider-{name}${NC}"
-                    ((violations_found++))
+                    violations_found=$((violations_found + 1))
                 fi
-                ((providers_checked++))
+                providers_checked=$((providers_checked + 1))
             fi
         done <<< "$build_commands"
     fi
@@ -78,7 +78,7 @@ check_binary_names_in_file() {
         local ALLOWED_NON_PROVIDERS="kolumn-docs-gen kolumn-schema-gen"
         
         # Check if this is an allowed non-provider binary
-        if [[ " $ALLOWED_NON_PROVIDERS " =~ " $dir_name " ]]; then
+        if [[ " $ALLOWED_NON_PROVIDERS " == *" $dir_name "* ]]; then
             echo -e "${GREEN}    ✅ Directory name: $dir_name (allowed non-provider binary)${NC}"
         # Check if directory follows naming convention
         elif [[ $dir_name =~ $REQUIRED_PATTERN ]]; then
@@ -88,7 +88,7 @@ check_binary_names_in_file() {
         else
             echo -e "${RED}    ❌ Directory name should match: kolumn-provider-{name}${NC}"
             echo -e "${YELLOW}       Current: $dir_name${NC}"
-            ((violations_found++))
+            violations_found=$((violations_found + 1))
         fi
         
         # For main.go files, check if they're in properly named directories
@@ -99,13 +99,13 @@ check_binary_names_in_file() {
             # Allow main.go in provider directories, examples, or allowed non-provider binaries
             if [[ ! $parent_dir =~ $REQUIRED_PATTERN ]] && \
                [[ "$parent_dir" != "examples" ]] && \
-               [[ ! " $ALLOWED_NON_PROVIDERS " =~ " $parent_dir " ]]; then
+               [[ " $ALLOWED_NON_PROVIDERS " != *" $parent_dir "* ]]; then
                 echo -e "${YELLOW}    ⚠️  main.go should be in a kolumn-provider-{name} directory${NC}"
                 echo -e "${YELLOW}       Current directory: $parent_dir${NC}"
             fi
         fi
         
-        ((providers_checked++))
+        providers_checked=$((providers_checked + 1))
     fi
 }
 
@@ -142,9 +142,9 @@ check_build_scripts() {
                             echo -e "${GREEN}      ✅ Binary reference: $binary${NC}"
                         else
                             echo -e "${RED}      ❌ Invalid binary reference: $binary${NC}"
-                            ((violations_found++))
+                            violations_found=$((violations_found + 1))
                         fi
-                        ((providers_checked++))
+                        providers_checked=$((providers_checked + 1))
                     done
                 done <<< "$binary_refs"
             fi

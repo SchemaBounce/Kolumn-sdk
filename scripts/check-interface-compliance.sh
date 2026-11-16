@@ -61,18 +61,18 @@ check_provider_interface() {
                 echo -e "${GREEN}    ✅ $description${NC}"
             else
                 echo -e "${RED}    ❌ Missing or incorrect: $description${NC}"
-                ((missing_methods++))
+                missing_methods=$((missing_methods + 1))
             fi
         done
         
         if [ $missing_methods -gt 0 ]; then
-            ((violations_found++))
+            violations_found=$((violations_found + 1))
             echo -e "${RED}  ❌ Provider interface is not compliant${NC}"
         else
             echo -e "${GREEN}  ✅ Provider interface is compliant${NC}"
         fi
         
-        ((providers_found++))
+        providers_found=$((providers_found + 1))
     fi
 }
 
@@ -104,7 +104,7 @@ check_provider_implementation() {
             # Look for method implementation
             if grep -E "func.*\*?$struct\).*$method_name" "$file" >/dev/null 2>&1; then
                 found_methods+=("$method_name")
-                ((method_count++))
+                method_count=$((method_count + 1))
             fi
         done
         
@@ -116,7 +116,7 @@ check_provider_implementation() {
             
             if [ $method_count -eq 4 ]; then
                 echo -e "${GREEN}    ✅ Complete Provider implementation${NC}"
-                ((providers_found++))
+                providers_found=$((providers_found + 1))
             else
                 echo -e "${YELLOW}    ⚠️  Partial Provider implementation ($method_count/4 methods)${NC}"
                 echo -e "${YELLOW}    Missing methods:${NC}"
@@ -125,11 +125,11 @@ check_provider_implementation() {
                     local method_name
                     method_name=$(echo "${METHOD_DESCRIPTIONS[$i]}" | cut -d'(' -f1)
                     
-                    if [[ ! " ${found_methods[*]} " =~ " $method_name " ]]; then
+                    if [[ " ${found_methods[*]} " != *" $method_name "* ]]; then
                         echo -e "${YELLOW}      - ${METHOD_DESCRIPTIONS[$i]}${NC}"
                     fi
                 done
-                ((violations_found++))
+                violations_found=$((violations_found + 1))
             fi
         fi
     done

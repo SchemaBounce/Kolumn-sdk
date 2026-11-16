@@ -44,7 +44,7 @@ check_schema_structure() {
     # Look for Schema struct definitions
     if grep -n "type.*Schema.*struct" "$file" >/dev/null 2>&1; then
         echo -e "${GREEN}  ✅ Found Schema struct definition${NC}"
-        ((schemas_found++))
+        schemas_found=$((schemas_found + 1))
         
         # Extract the struct definition
         local schema_content
@@ -57,12 +57,12 @@ check_schema_structure() {
                 echo -e "${GREEN}    ✅ $field field present${NC}"
             else
                 echo -e "${RED}    ❌ Missing required field: $field${NC}"
-                ((missing_fields++))
+                missing_fields=$((missing_fields + 1))
             fi
         done
         
         if [ $missing_fields -gt 0 ]; then
-            ((violations_found++))
+            violations_found=$((violations_found + 1))
             echo -e "${RED}  ❌ Schema struct is incomplete${NC}"
         else
             echo -e "${GREEN}  ✅ Schema struct has all required fields${NC}"
@@ -86,7 +86,7 @@ check_schema_structure() {
             for func in "${UNIFIED_FUNCTIONS[@]}"; do
                 if echo "$schema_method_content" | grep -q "\"$func\""; then
                     echo -e "${GREEN}      ✅ Supports $func${NC}"
-                    ((functions_found++))
+                    functions_found=$((functions_found + 1))
                 fi
             done
             
@@ -185,10 +185,10 @@ validate_json_schemas() {
                 
             else
                 echo -e "${RED}    ❌ Invalid JSON syntax${NC}"
-                ((violations_found++))
+                violations_found=$((violations_found + 1))
             fi
             
-            ((schemas_found++))
+            schemas_found=$((schemas_found + 1))
         done
     fi
 }
