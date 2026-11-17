@@ -4,7 +4,6 @@ package enterprise_safety
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -209,37 +208,28 @@ func (f *CascadeDeleteTestFramework) RunCascadeDeleteTest(ctx context.Context, d
 	return result
 }
 
-// RunOrphanDetectionTest specifically tests for orphaned resource detection
+// orphanDetectionNotImplemented is the Error RunOrphanDetectionTest reports.
+const orphanDetectionNotImplemented = "orphan detection test is not implemented: " +
+	"the framework cannot yet create, find or remove intentional orphans, so it runs no SQL and reports failure"
+
+// RunOrphanDetectionTest is meant to plant orphaned rows, check that they are
+// detected and remove them again. That is not implemented, so it runs nothing
+// against db and returns a failed result whose Error says so. It used to
+// report success without testing anything.
 func (f *CascadeDeleteTestFramework) RunOrphanDetectionTest(ctx context.Context, db *sql.DB) CascadeDeleteTestResult {
 	result := CascadeDeleteTestResult{
 		TestName:     "Orphaned Resource Detection",
 		TestType:     "orphan_detection",
 		ProviderType: f.ProviderType,
 		StartTime:    time.Now(),
+		Success:      false,
+		Error:        orphanDetectionNotImplemented,
 		Metadata:     make(map[string]interface{}),
 	}
 
-	defer func() {
-		result.Duration = time.Since(result.StartTime)
-		f.TestResults = append(f.TestResults, result)
-		f.updateMetrics(result)
-	}()
-
-	// Create intentional orphans
-	orphans := f.createIntentionalOrphans(ctx, db)
-
-	// Detect all orphaned resources
-	detectedOrphans := f.scanForAllOrphans(ctx, db)
-
-	result.OrphanedResources = detectedOrphans
-	result.Success = len(detectedOrphans) >= len(orphans)
-	result.Metadata["intentional_orphans"] = len(orphans)
-	result.Metadata["detected_orphans"] = len(detectedOrphans)
-
-	// Cleanup intentional orphans
-	if err := f.cleanupIntentionalOrphans(ctx, db, orphans); err != nil {
-		log.Printf("Cleanup warning: %v", err)
-	}
+	result.Duration = time.Since(result.StartTime)
+	f.TestResults = append(f.TestResults, result)
+	f.updateMetrics(result)
 
 	return result
 }
@@ -635,52 +625,6 @@ func (f *CascadeDeleteTestFramework) cleanupTestEnvironment(ctx context.Context,
 	}
 
 	return nil
-}
-
-func (f *CascadeDeleteTestFramework) createIntentionalOrphans(ctx context.Context, db *sql.DB) []OrphanedResource {
-	// Create test data with intentional orphans for detection testing
-	var orphans []OrphanedResource
-
-	// Implementation would create specific orphaned records
-	// This is a placeholder for the actual implementation
-
-	return orphans
-}
-
-func (f *CascadeDeleteTestFramework) scanForAllOrphans(ctx context.Context, db *sql.DB) []OrphanedResource {
-	var orphans []OrphanedResource
-
-	// Scan all tables for orphaned records
-	// This would involve checking foreign key relationships system-wide
-
-	return orphans
-}
-
-// cleanupIntentionalOrphans deletes the orphans createIntentionalOrphans
-// made. It attempts every orphan and returns the errors joined.
-func (f *CascadeDeleteTestFramework) cleanupIntentionalOrphans(ctx context.Context, db *sql.DB, orphans []OrphanedResource) error {
-	var errs []error
-	// Clean up orphans created for testing
-	for _, orphan := range orphans {
-		// Delete orphaned records
-		var query string
-		switch f.ProviderType {
-		case "postgres", "mysql":
-			name, err := qualifiedSQLName(objectQualifier(f.ProviderType, orphan.SchemaName, orphan.DatabaseName), orphan.Name)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("orphan %s: %w", orphan.Name, err))
-				continue
-			}
-			query = fmt.Sprintf("DELETE FROM %s WHERE /* orphan condition */", name) // #nosec G201 -- name is validated by qualifiedSQLName
-		}
-
-		if query != "" {
-			if _, err := db.ExecContext(ctx, query); err != nil {
-				errs = append(errs, fmt.Errorf("delete orphans in %s: %w", orphan.Name, err))
-			}
-		}
-	}
-	return errors.Join(errs...)
 }
 
 func (f *CascadeDeleteTestFramework) testReferentialIntegrity(ctx context.Context, db *sql.DB) []IntegrityViolation {
