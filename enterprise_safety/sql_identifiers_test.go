@@ -26,6 +26,9 @@ type recorder struct {
 	mu      sync.Mutex
 	stmts   []recordedStmt
 	execErr error
+	// queryErr, when set, is called for every query; a non-nil result
+	// fails that query.
+	queryErr func(query string) error
 }
 
 func (r *recorder) record(query string, args []driver.NamedValue) {
@@ -69,6 +72,11 @@ func (c *recordingConn) Begin() (driver.Tx, error) { return nil, errors.New("no 
 
 func (c *recordingConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	c.r.record(query, args)
+	if c.r.queryErr != nil {
+		if err := c.r.queryErr(query); err != nil {
+			return nil, err
+		}
+	}
 	return &oneRow{}, nil
 }
 
