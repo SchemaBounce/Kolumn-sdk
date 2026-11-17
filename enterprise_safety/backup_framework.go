@@ -578,11 +578,16 @@ func (f *BackupIntegrityFramework) getTableDataInfo(db *sql.DB, objRef ObjectRef
 // The rows are ordered by their own hash rather than by ctid, so the checksum
 // depends only on the table's contents: VACUUM FULL, CLUSTER and updates that
 // move rows do not change it. Identical rows hash identically, so ties in the
-// ordering cannot change the result either. An empty table yields NULL.
+// ordering cannot change the result either.
+//
+// string_agg over no rows is NULL, so an empty table would get no checksum and
+// fail validation as "Missing data checksum". COALESCE gives it the md5 of the
+// empty string, which no non-empty table can produce: their aggregated string
+// is never empty.
 func postgresChecksumQuery(name string) string {
 	// #nosec G201 -- name is validated by qualifiedSQLName
 	return fmt.Sprintf(`
-			SELECT md5(string_agg(md5(CAST((t.*) AS text)), '' ORDER BY md5(CAST((t.*) AS text))))
+			SELECT COALESCE(md5(string_agg(md5(CAST((t.*) AS text)), '' ORDER BY md5(CAST((t.*) AS text)))), md5(''))
 			FROM %s t`, name)
 }
 

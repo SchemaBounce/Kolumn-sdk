@@ -46,6 +46,11 @@ func TestPostgresChecksumQueryReferencesOnlyTheAlias(t *testing.T) {
 	if !strings.Contains(query, "ORDER BY md5(CAST((t.*) AS text))") {
 		t.Errorf("checksum query does not order by the row hash:\n%s", query)
 	}
+	// An empty table must still get a checksum: string_agg over no rows is
+	// NULL, which validation would report as "Missing data checksum".
+	if !strings.HasPrefix(strings.TrimSpace(query), "SELECT COALESCE(") || !strings.Contains(query, ", md5(''))") {
+		t.Errorf("checksum query does not give an empty table md5(''):\n%s", query)
+	}
 }
 
 // A failing checksum query used to be dropped, leaving an empty checksum and
