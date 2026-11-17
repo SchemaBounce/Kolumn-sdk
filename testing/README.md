@@ -1,6 +1,8 @@
 # Kolumn SDK Testing Framework
 
-The Kolumn SDK Testing Framework provides comprehensive schema consistency testing for Kolumn providers. This framework ensures that your provider's schema exactly matches its implementation, preventing schema drift and ensuring reliability across the Kolumn ecosystem.
+The Kolumn SDK Testing Framework provides comprehensive schema consistency testing for Kolumn
+providers. This framework ensures that your provider's schema exactly matches its implementation,
+preventing schema drift and ensuring reliability across the Kolumn ecosystem.
 
 ## Features
 
@@ -14,11 +16,13 @@ The Kolumn SDK Testing Framework provides comprehensive schema consistency testi
 ## Quick Start
 
 1. **Add the dependency**:
+
    ```go
    import sdktesting "github.com/schemabounce/kolumn/sdk/testing"
    ```
 
 2. **Create a test file**:
+
    ```go
    func TestSchemaConsistency(t *testing.T) {
        provider := NewMyProvider()
@@ -67,6 +71,7 @@ type SchemaProvider interface {
 ## Integration
 
 The framework integrates with:
+
 - **Pre-commit hooks** - Automatic validation
 - **CI/CD pipelines** - Continuous integration testing
 - **Development workflow** - Fast feedback during development

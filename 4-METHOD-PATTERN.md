@@ -32,12 +32,14 @@ type Provider interface {
 **ValidateConfig was intentionally removed** to maintain the 4-method pattern.
 
 ### ❌ Old Pattern (REMOVED)
+
 ```go
 // This 5th method violated the 4-method pattern and was removed
 func (p *Provider) ValidateConfig(ctx context.Context, config map[string]interface{}) *ConfigValidationResult
 ```
 
 ### ✅ New Pattern (RECOMMENDED)
+
 ```go
 // Validation now happens within Configure()
 func (p *Provider) Configure(ctx context.Context, config map[string]interface{}) error {

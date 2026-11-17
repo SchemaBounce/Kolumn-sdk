@@ -1,6 +1,8 @@
 # Schema Consistency Testing for Kolumn Providers
 
-This document explains how to implement and use the schema consistency testing framework for Kolumn providers. This testing framework ensures that your provider's `Schema()` method returns schemas that exactly match your implementation, preventing schema drift and ensuring reliability.
+This document explains how to implement and use the schema consistency testing framework for Kolumn
+providers. This testing framework ensures that your provider's `Schema()` method returns schemas
+that exactly match your implementation, preventing schema drift and ensuring reliability.
 
 ## Overview
 
@@ -21,37 +23,37 @@ Copy `/templates/schema_consistency_test.go` to your provider repository and cus
 package main
 
 import (
-	"testing"
-	"github.com/stretchr/testify/require"
-	sdktesting "github.com/schemabounce/kolumn/sdk/testing"
+    "testing"
+    "github.com/stretchr/testify/require"
+    sdktesting "github.com/schemabounce/kolumn/sdk/testing"
 )
 
 func TestSchemaImplementationConsistency(t *testing.T) {
-	provider := NewMyProvider() // Replace with your provider constructor
-	require.NotNil(t, provider)
+    provider := NewMyProvider() // Replace with your provider constructor
+    require.NotNil(t, provider)
 
-	config := &sdktesting.SchemaTestConfig{
-		Provider: provider,
-		ExpectedConfigFields: map[string]sdktesting.ConfigFieldExpectation{
-			"endpoint": {Required: false, FieldType: "string", Description: "API endpoint"},
-			"api_key":  {Required: false, FieldType: "string", Description: "API key"},
-		},
-		ExpectedResources: map[string]sdktesting.ResourceExpectation{
-			"my_table": {
-				Operations:  []string{"create", "read", "update", "delete"},
-				Description: "Database table resource",
-			},
-		},
-		ExpectedFunctions: []string{
-			"create_table", "read_table", "update_table", "delete_table",
-		},
-	}
+    config := &sdktesting.SchemaTestConfig{
+        Provider: provider,
+        ExpectedConfigFields: map[string]sdktesting.ConfigFieldExpectation{
+            "endpoint": {Required: false, FieldType: "string", Description: "API endpoint"},
+            "api_key":  {Required: false, FieldType: "string", Description: "API key"},
+        },
+        ExpectedResources: map[string]sdktesting.ResourceExpectation{
+            "my_table": {
+                Operations:  []string{"create", "read", "update", "delete"},
+                Description: "Database table resource",
+            },
+        },
+        ExpectedFunctions: []string{
+            "create_table", "read_table", "update_table", "delete_table",
+        },
+    }
 
-	sdktesting.RunSchemaConsistencyTests(t, config)
+    sdktesting.RunSchemaConsistencyTests(t, config)
 }
 
 func TestSchemaConsistencyPreCommitHook(t *testing.T) {
-	TestSchemaImplementationConsistency(t)
+    TestSchemaImplementationConsistency(t)
 }
 ```
 
@@ -85,9 +87,9 @@ Your provider must implement the `sdktesting.SchemaProvider` interface:
 
 ```go
 type SchemaProvider interface {
-	Schema() (*ProviderSchema, error)
-	Configure(ctx context.Context, config map[string]interface{}) error
-	CallFunction(ctx context.Context, function string, input json.RawMessage) (json.RawMessage, error)
+    Schema() (*ProviderSchema, error)
+    Configure(ctx context.Context, config map[string]interface{}) error
+    CallFunction(ctx context.Context, function string, input json.RawMessage) (json.RawMessage, error)
 }
 ```
 
@@ -99,21 +101,21 @@ Define all configuration fields that your `Configure()` method accepts:
 
 ```go
 ExpectedConfigFields: map[string]sdktesting.ConfigFieldExpectation{
-	"endpoint": {
-		Required:    false,
-		FieldType:   "string",
-		Description: "API endpoint",
-	},
-	"timeout": {
-		Required:    false,
-		FieldType:   "string",
-		Description: "Request timeout",
-	},
-	"retries": {
-		Required:    false,
-		FieldType:   "number",
-		Description: "Number of retries",
-	},
+    "endpoint": {
+        Required:    false,
+        FieldType:   "string",
+        Description: "API endpoint",
+    },
+    "timeout": {
+        Required:    false,
+        FieldType:   "string",
+        Description: "Request timeout",
+    },
+    "retries": {
+        Required:    false,
+        FieldType:   "number",
+        Description: "Number of retries",
+    },
 }
 ```
 
@@ -123,14 +125,14 @@ Define all resource types your provider supports:
 
 ```go
 ExpectedResources: map[string]sdktesting.ResourceExpectation{
-	"postgres_table": {
-		Operations:  []string{"create", "read", "update", "delete"},
-		Description: "PostgreSQL table",
-	},
-	"postgres_user": {
-		Operations:  []string{"create", "read", "update", "delete"},
-		Description: "PostgreSQL user",
-	},
+    "postgres_table": {
+        Operations:  []string{"create", "read", "update", "delete"},
+        Description: "PostgreSQL table",
+    },
+    "postgres_user": {
+        Operations:  []string{"create", "read", "update", "delete"},
+        Description: "PostgreSQL user",
+    },
 }
 ```
 
@@ -140,9 +142,9 @@ List all functions your provider's `CallFunction()` method can handle:
 
 ```go
 ExpectedFunctions: []string{
-	"create_table", "read_table", "update_table", "delete_table",
-	"create_user", "read_user", "update_user", "delete_user",
-	"create_index", "read_index", "update_index", "delete_index",
+    "create_table", "read_table", "update_table", "delete_table",
+    "create_user", "read_user", "update_user", "delete_user",
+    "create_index", "read_index", "update_index", "delete_index",
 }
 ```
 
@@ -153,21 +155,21 @@ If your provider has a state adapter for detailed schema management, you can inc
 ```go
 // Your state adapter must implement this interface
 type StateAdapter interface {
-	GetResourceSchema(resourceType string) (*ResourceStateSchema, error)
+    GetResourceSchema(resourceType string) (*ResourceStateSchema, error)
 }
 
 // In your test configuration
 config := &sdktesting.SchemaTestConfig{
-	Provider:     provider,
-	StateAdapter: stateAdapter, // Optional
-	ExpectedResources: map[string]sdktesting.ResourceExpectation{
-		"my_table": {
-			StateAdapterMethod: "getTableSchema", // Method name in state adapter
-			Operations:         []string{"create", "read", "update", "delete"},
-			Description:        "Database table",
-		},
-	},
-	// ... other config
+    Provider:     provider,
+    StateAdapter: stateAdapter, // Optional
+    ExpectedResources: map[string]sdktesting.ResourceExpectation{
+        "my_table": {
+            StateAdapterMethod: "getTableSchema", // Method name in state adapter
+            Operations:         []string{"create", "read", "update", "delete"},
+            Description:        "Database table",
+        },
+    },
+    // ... other config
 }
 ```
 
@@ -175,7 +177,7 @@ config := &sdktesting.SchemaTestConfig{
 
 ### Issue: Configuration Field Missing from Schema
 
-```
+```text
 Configuration field 'timeout' is expected but missing from schema
 ```
 
@@ -183,17 +185,17 @@ Configuration field 'timeout' is expected but missing from schema
 
 ```go
 ConfigSchema: json.RawMessage(`{
-	"type": "object",
-	"properties": {
-		"timeout": {"type": "string", "description": "Request timeout"},
-		"endpoint": {"type": "string", "description": "API endpoint"}
-	}
+    "type": "object",
+    "properties": {
+        "timeout": {"type": "string", "description": "Request timeout"},
+        "endpoint": {"type": "string", "description": "API endpoint"}
+    }
 }`),
 ```
 
 ### Issue: Function Routing Error
 
-```
+```text
 Function 'create_table' failed with routing error: unsupported resource type
 ```
 
@@ -201,7 +203,7 @@ Function 'create_table' failed with routing error: unsupported resource type
 
 ### Issue: Resource Schema Mismatch
 
-```
+```text
 Resource 'my_table': Field 'created_at' is in state adapter but missing from exposed schema
 ```
 
@@ -235,9 +237,9 @@ When making breaking changes to your schemas, consider versioning:
 
 ```go
 schema := &sdktesting.ProviderSchema{
-	Name:    "my-provider",
-	Version: "2.0.0", // Increment for breaking changes
-	// ...
+    Name:    "my-provider",
+    Version: "2.0.0", // Increment for breaking changes
+    // ...
 }
 ```
 
@@ -281,19 +283,22 @@ If you don't have a state adapter, set it to `nil`:
 
 ```go
 config := &sdktesting.SchemaTestConfig{
-	Provider:     provider,
-	StateAdapter: nil, // No state adapter
-	// ... other config
+    Provider:     provider,
+    StateAdapter: nil, // No state adapter
+    // ... other config
 }
 ```
 
 ### Custom Validation
 
-For complex validation needs, you can extend the framework by implementing additional test functions following the same patterns used in the SDK.
+For complex validation needs, you can extend the framework by implementing additional test functions
+following the same patterns used in the SDK.
 
 ## Examples
 
-See the Kolumn provider implementation at `/mnt/c/git/Kolumn/providers/kolumn/schema_consistency_test.go` for a complete example of how the framework is used in practice.
+See the Kolumn provider implementation at
+`/mnt/c/git/Kolumn/providers/kolumn/schema_consistency_test.go` for a complete example of how the
+framework is used in practice.
 
 ## Support
 

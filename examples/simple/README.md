@@ -5,6 +5,7 @@ This example demonstrates the basic patterns for implementing a provider using t
 ## Key Concepts Demonstrated
 
 ### 1. **Simple Provider Interface**
+
 ```go
 // Simple 4-method Provider interface
 type Provider interface {
@@ -16,6 +17,7 @@ type Provider interface {
 ```
 
 ### 2. **Create/Discover Object Categorization**
+
 ```go
 // CREATE objects - resources the provider can create and manage
 CreateObjects: map[string]*core.ObjectType{
@@ -29,7 +31,7 @@ CreateObjects: map[string]*core.ObjectType{
 // DISCOVER objects - existing infrastructure the provider can find
 DiscoverObjects: map[string]*core.ObjectType{
     "existing_tables": {
-        Type: core.DISCOVER, 
+        Type: core.DISCOVER,
         Description: "Discover existing database tables",
         // ...
     },
@@ -37,24 +39,26 @@ DiscoverObjects: map[string]*core.ObjectType{
 ```
 
 ### 3. **Handler Registration Pattern**
+
 ```go
 // Register CREATE handlers
 createRegistry := create.NewRegistry()
 createRegistry.RegisterHandler("table", tableHandler, tableSchema)
 
-// Register DISCOVER handlers  
+// Register DISCOVER handlers
 discoverRegistry := discover.NewRegistry()
 discoverRegistry.RegisterHandler("existing_tables", discoverer, discoverySchema)
 ```
 
 ### 4. **Operation Routing**
+
 ```go
 switch operation {
 case "create", "read", "update", "delete", "plan":
     // Route to CREATE object handlers
     return p.createRegistry.CallHandler(ctx, objectType, operation, data)
 
-case "scan", "analyze", "query": 
+case "scan", "analyze", "query":
     // Route to DISCOVER object handlers
     return p.discoverRegistry.CallHandler(ctx, objectType, operation, data)
 }
@@ -63,13 +67,15 @@ case "scan", "analyze", "query":
 ## Usage
 
 ### Running the Example
+
 ```bash
 cd examples/simple
 go run provider.go
 ```
 
 ### Expected Output
-```
+
+```text
 Configuring provider with endpoint: postgresql://localhost:5432/mydb
 Provider: simple v1.0.0
 CREATE objects: 1

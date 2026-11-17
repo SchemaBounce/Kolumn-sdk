@@ -41,9 +41,6 @@ go.work.sum
 !.claude/settings.json
 .mcp.json
 
-# Security scanning baselines (internal tooling)
-.secrets.baseline
-
 # OS files
 .DS_Store
 Thumbs.db

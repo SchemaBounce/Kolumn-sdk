@@ -2,7 +2,8 @@
 
 ## 4-Method Pattern and Validation
 
-The Kolumn Provider SDK enforces a **strict 4-method RPC interface**. Configuration validation is **NOT** a separate RPC method but should be handled internally within the `Configure()` method.
+The Kolumn Provider SDK enforces a **strict 4-method RPC interface**. Configuration validation is
+**NOT** a separate RPC method but should be handled internally within the `Configure()` method.
 
 ## ❌ What Was Removed
 

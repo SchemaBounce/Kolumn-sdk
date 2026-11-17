@@ -2,7 +2,8 @@
 
 ## Overview
 
-Go SDK library for building external providers that integrate with Kolumn's infrastructure-as-code platform. Providers are standalone binaries following Go library patterns (like AWS SDK).
+Go SDK library for building external providers that integrate with Kolumn's infrastructure-as-code
+platform. Providers are standalone binaries following Go library patterns (like AWS SDK).
 
 ## Core Interface (4 Methods — No More, No Less)
 
@@ -15,7 +16,8 @@ type Provider interface {
 }
 ```
 
-All resource operations route through `CallFunction` via unified dispatch: `CreateResource`, `ReadResource`, `UpdateResource`, `DeleteResource`, `DiscoverResources`, `Ping`.
+All resource operations route through `CallFunction` via unified dispatch: `CreateResource`,
+`ReadResource`, `UpdateResource`, `DeleteResource`, `DiscoverResources`, `Ping`.
 
 ## Build & Test
 
@@ -28,7 +30,7 @@ go mod tidy
 
 ## Project Structure
 
-```
+```text
 core/           Core interfaces and types (Provider, Schema)
 create/         CREATE object handler registry (CRUD operations)
 discover/       DISCOVER object handler registry (scan/analyze)
@@ -49,6 +51,7 @@ docs/           Provider Specification and guides
 ## Key Patterns
 
 ### Handler Registration
+
 ```go
 createRegistry := create.NewRegistry()
 createRegistry.RegisterHandler("table", tableHandler, tableSchema)
@@ -58,11 +61,14 @@ response, err := dispatcher.Dispatch(ctx, "CreateResource", input)
 ```
 
 ### Create vs Discover
+
 - **CREATE objects**: Resources the provider manages (tables, indexes, views)
 - **DISCOVER objects**: Existing infrastructure the provider inspects (schemas, performance)
 
 ### ValidateConfig Removed
-Validation is internal to `Configure()` — keeps the 4-method interface clean. Use `BaseProvider.ValidateConfiguration()` or `Schema.ValidateConfig()` helpers.
+
+Validation is internal to `Configure()` — keeps the 4-method interface clean. Use
+`BaseProvider.ValidateConfiguration()` or `Schema.ValidateConfig()` helpers.
 
 ## Provider Binary Naming
 

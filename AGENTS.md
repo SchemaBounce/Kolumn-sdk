@@ -1,9 +1,12 @@
 # Working in Kolumn-sdk: notes for agents
 
-`CLAUDE.md` is this repository's instruction file for Claude Code. This file carries the text other agents read. The SchemaBounce decisions
+`CLAUDE.md` is this repository's instruction file for Claude Code. This file
+carries the text other agents read. The SchemaBounce decisions
 block below is rendered by the SchemaBounce agent kit (`schemabounce@schemabounce`)
 and checked by `scripts/check-agent-kit.py`; it is never edited by hand.
 
+<!-- The kit renders the block below; markdownlint must not ask for edits to it. -->
+<!-- markdownlint-disable -->
 <!-- schemabounce-agent-kit:decisions start kit=0.4.2 sha256=1ef8bae21c26f91ebe47412932918dc0aacec921a8aed89c97ecf4ad7fc28bcc -->
 ## SchemaBounce decisions
 
@@ -37,4 +40,4 @@ No GitHub SSH key is needed. Codex and other agents: copy
 `skills/schemabounce-decisions/` from the kit and add the hosted MCP
 (https://mcp.schemabounce.com/mcp) to their configuration.
 <!-- schemabounce-agent-kit:decisions end -->
-
+<!-- markdownlint-enable -->

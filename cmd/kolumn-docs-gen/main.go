@@ -516,7 +516,7 @@ func (e *DocumentationExtractor) inferResourceType(name string) string {
 func (e *DocumentationExtractor) generateBasicExample(resourceType string) string {
 	return fmt.Sprintf(`create "%s" "example" {
   name = "example-%s"
-  
+
   # Add your configuration here
 }`, resourceType, strings.ReplaceAll(resourceType, "_", "-"))
 }
@@ -562,7 +562,6 @@ func (e *DocumentationExtractor) loadDocumentationFiles() error {
 
 		return nil
 	})
-
 	if err != nil {
 		return fmt.Errorf("failed to walk documentation directory: %w", err)
 	}
@@ -614,7 +613,6 @@ func (e *DocumentationExtractor) loadExamples() error {
 
 		return nil
 	})
-
 	if err != nil {
 		return fmt.Errorf("failed to walk examples directory: %w", err)
 	}
