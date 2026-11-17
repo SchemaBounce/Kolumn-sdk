@@ -189,14 +189,25 @@ func TestLargeDataLogging(t *testing.T) {
 	LogRequest(DiscoveryLogger, "DiscoverResources", largeRequest)
 	duration := time.Since(start)
 
-	// Should complete within reasonable time
-	if duration > 100*time.Millisecond {
+	// Should complete within reasonable time. The race detector slows
+	// execution by an unpredictable factor, so the limit only holds for a
+	// normal build. It sits well above the typical time (tens of
+	// milliseconds) so that it catches a complexity regression rather than
+	// a slow or loaded machine.
+	if raceEnabled {
+		t.Logf("race detector on: skipping wall-clock limit (took %v)", duration)
+	} else if duration > 500*time.Millisecond {
 		t.Errorf("Large data logging took too long: %v", duration)
 	}
 
 	logs := capture.GetLogs()
 	if !containsLog(logs, "discovery", "DiscoverResources request") {
 		t.Error("Expected discovery request log")
+	}
+	// json.Marshal sorts map keys, so "key_999" is the last entry; its
+	// presence shows the debug log carried the whole payload.
+	if !containsLog(logs, "discovery", `"key_999"`) {
+		t.Errorf("Expected debug log to contain the last payload entry %q", "key_999")
 	}
 }
 

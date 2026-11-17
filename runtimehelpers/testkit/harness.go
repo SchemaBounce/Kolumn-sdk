@@ -132,7 +132,7 @@ func LoadFixture(r io.Reader) (Fixture, error) {
 
 // LoadFixtureFile reads a fixture from disk.
 func LoadFixtureFile(path string) (Fixture, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- test helper: opening the fixture file its caller names is its whole job
 	if err != nil {
 		return Fixture{}, fmt.Errorf("testkit: open fixture: %w", err)
 	}

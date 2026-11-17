@@ -1,7 +1,7 @@
 package quarantine
 
 import (
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505 -- sha1 only shortens long quarantine table names; see BuildName
 	"encoding/hex"
 	"regexp"
 	"strings"
@@ -75,7 +75,11 @@ func BuildName(opts NameOptions) string {
 		return slug
 	}
 
-	hash := sha1.Sum([]byte(slug))
+	// sha1 is not a security control here: it only derives a short,
+	// deterministic suffix for a name that is too long. Quarantine table
+	// names built with it already exist in provider databases, so changing
+	// the hash would change the name generated for the same table.
+	hash := sha1.Sum([]byte(slug)) // #nosec G401 -- non-security name suffix; changing it would rename quarantine tables
 	hashSuffix := hex.EncodeToString(hash[:4])
 
 	maxPrefix := maxLength - len(hashSuffix) - 1

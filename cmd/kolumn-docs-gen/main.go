@@ -262,7 +262,7 @@ func (e *DocumentationExtractor) loadProviderAsPlugin() (*core.Schema, *core.Pro
 // executeProviderCommand executes the provider as a command
 func (e *DocumentationExtractor) executeProviderCommand() (*core.Schema, *core.ProviderDocumentation, error) {
 	// Execute provider with --schema flag to get schema
-	schemaCmd := exec.Command(e.config.ProviderBinary, "--schema")
+	schemaCmd := exec.Command(e.config.ProviderBinary, "--schema") // #nosec G204 -- running the provider binary named by the operator's -provider flag is this CLI's purpose; arguments are constants and no shell is used
 	schemaOutput, err := schemaCmd.Output()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get schema: %w", err)
@@ -274,7 +274,7 @@ func (e *DocumentationExtractor) executeProviderCommand() (*core.Schema, *core.P
 	}
 
 	// Execute provider with --docs flag to get documentation
-	docsCmd := exec.Command(e.config.ProviderBinary, "--docs")
+	docsCmd := exec.Command(e.config.ProviderBinary, "--docs") // #nosec G204 -- running the provider binary named by the operator's -provider flag is this CLI's purpose; arguments are constants and no shell is used
 	docsOutput, err := docsCmd.Output()
 	if err != nil {
 		// Documentation might not be implemented yet, create empty
@@ -536,7 +536,7 @@ func (e *DocumentationExtractor) loadDocumentationFiles() error {
 
 	// Load getting started guide
 	gettingStartedPath := filepath.Join(e.config.DocsDir, "getting-started.md")
-	if content, err := os.ReadFile(gettingStartedPath); err == nil {
+	if content, err := os.ReadFile(gettingStartedPath); err == nil { // #nosec G304 -- reads the operator's own -docs directory; this local CLI crosses no trust boundary
 		guide := &core.GettingStartedGuide{
 			Overview: string(content),
 		}
@@ -595,7 +595,7 @@ func (e *DocumentationExtractor) loadExamples() error {
 			log.Printf("Processing example file: %s", path)
 		}
 
-		content, err := os.ReadFile(path)
+		content, err := os.ReadFile(path) // #nosec G304 G122 -- reads files under the operator's own -examples directory; a symlink race needs write access to that tree, which the operator already has
 		if err != nil {
 			return err
 		}
@@ -737,7 +737,7 @@ func (e *DocumentationExtractor) generateOutput() error {
 	}
 
 	// Write to file
-	if err := os.WriteFile(e.config.OutputFile, finalData, 0o644); err != nil {
+	if err := os.WriteFile(e.config.OutputFile, finalData, 0o644); err != nil { // #nosec G306 -- generated public provider documentation, meant to be readable and published
 		return fmt.Errorf("failed to write output file: %w", err)
 	}
 
