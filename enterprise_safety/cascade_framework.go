@@ -4,6 +4,7 @@ package enterprise_safety
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -236,7 +237,9 @@ func (f *CascadeDeleteTestFramework) RunOrphanDetectionTest(ctx context.Context,
 	result.Metadata["detected_orphans"] = len(detectedOrphans)
 
 	// Cleanup intentional orphans
-	f.cleanupIntentionalOrphans(ctx, db, orphans)
+	if err := f.cleanupIntentionalOrphans(ctx, db, orphans); err != nil {
+		log.Printf("Cleanup warning: %v", err)
+	}
 
 	return result
 }
@@ -303,36 +306,53 @@ func (f *CascadeDeleteTestFramework) countAllObjects(db *sql.DB, objects []Objec
 
 func (f *CascadeDeleteTestFramework) countObject(db *sql.DB, obj ObjectInfo) int {
 	var query string
+	var args []interface{}
 	var count int
 
+	// Catalog lookups take the names as bind parameters. A table count has
+	// to name the table in the SQL text, so that name is validated first.
 	switch f.ProviderType {
 	case "postgres":
 		switch obj.Type {
 		case "table":
-			query = fmt.Sprintf("SELECT COUNT(*) FROM %s.%s", obj.SchemaName, obj.Name)
+			name, err := qualifiedSQLName(obj.SchemaName, obj.Name)
+			if err != nil {
+				return 0
+			}
+			query = fmt.Sprintf("SELECT COUNT(*) FROM %s", name) // #nosec G201 -- name is validated by qualifiedSQLName
 		case "view":
-			query = fmt.Sprintf("SELECT COUNT(*) FROM information_schema.views WHERE table_schema = '%s' AND table_name = '%s'", obj.SchemaName, obj.Name)
+			query = "SELECT COUNT(*) FROM information_schema.views WHERE table_schema = $1 AND table_name = $2"
+			args = []interface{}{obj.SchemaName, obj.Name}
 		case "function":
-			query = fmt.Sprintf("SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = '%s' AND routine_name = '%s'", obj.SchemaName, obj.Name)
+			query = "SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = $1 AND routine_name = $2"
+			args = []interface{}{obj.SchemaName, obj.Name}
 		case "trigger":
-			query = fmt.Sprintf("SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema = '%s' AND trigger_name = '%s'", obj.SchemaName, obj.Name)
+			query = "SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema = $1 AND trigger_name = $2"
+			args = []interface{}{obj.SchemaName, obj.Name}
 		}
 
 	case "mysql":
 		switch obj.Type {
 		case "table":
-			query = fmt.Sprintf("SELECT COUNT(*) FROM %s.%s", obj.DatabaseName, obj.Name)
+			name, err := qualifiedSQLName(obj.DatabaseName, obj.Name)
+			if err != nil {
+				return 0
+			}
+			query = fmt.Sprintf("SELECT COUNT(*) FROM %s", name) // #nosec G201 -- name is validated by qualifiedSQLName
 		case "view":
-			query = fmt.Sprintf("SELECT COUNT(*) FROM information_schema.views WHERE table_schema = '%s' AND table_name = '%s'", obj.DatabaseName, obj.Name)
+			query = "SELECT COUNT(*) FROM information_schema.views WHERE table_schema = ? AND table_name = ?"
+			args = []interface{}{obj.DatabaseName, obj.Name}
 		case "function":
-			query = fmt.Sprintf("SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = '%s' AND routine_name = '%s' AND routine_type = 'FUNCTION'", obj.DatabaseName, obj.Name)
+			query = "SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = ? AND routine_name = ? AND routine_type = 'FUNCTION'"
+			args = []interface{}{obj.DatabaseName, obj.Name}
 		case "procedure":
-			query = fmt.Sprintf("SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = '%s' AND routine_name = '%s' AND routine_type = 'PROCEDURE'", obj.DatabaseName, obj.Name)
+			query = "SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = ? AND routine_name = ? AND routine_type = 'PROCEDURE'"
+			args = []interface{}{obj.DatabaseName, obj.Name}
 		}
 	}
 
 	if query != "" {
-		err := db.QueryRow(query).Scan(&count)
+		err := db.QueryRow(query, args...).Scan(&count)
 		if err != nil {
 			return 0
 		}
@@ -347,22 +367,32 @@ func (f *CascadeDeleteTestFramework) executeCascadeDelete(ctx context.Context, d
 	switch f.ProviderType {
 	case "postgres":
 		switch obj.Type {
-		case "table":
-			query = fmt.Sprintf("DROP TABLE IF EXISTS %s.%s CASCADE", obj.SchemaName, obj.Name)
-		case "view":
-			query = fmt.Sprintf("DROP VIEW IF EXISTS %s.%s CASCADE", obj.SchemaName, obj.Name)
+		case "table", "view":
+			name, err := qualifiedSQLName(obj.SchemaName, obj.Name)
+			if err != nil {
+				return err
+			}
+			query = fmt.Sprintf("DROP %s IF EXISTS %s CASCADE", strings.ToUpper(obj.Type), name) // #nosec G201 -- obj.Type is "table" or "view" here and name is validated by qualifiedSQLName
 		case "schema":
-			query = fmt.Sprintf("DROP SCHEMA IF EXISTS %s CASCADE", obj.Name)
+			if err := validateSQLIdentifier("schema name", obj.Name); err != nil {
+				return err
+			}
+			query = fmt.Sprintf("DROP SCHEMA IF EXISTS %s CASCADE", obj.Name) // #nosec G201 -- obj.Name is validated by validateSQLIdentifier
 		}
 
 	case "mysql":
 		switch obj.Type {
-		case "table":
-			query = fmt.Sprintf("DROP TABLE IF EXISTS %s.%s", obj.DatabaseName, obj.Name)
-		case "view":
-			query = fmt.Sprintf("DROP VIEW IF EXISTS %s.%s", obj.DatabaseName, obj.Name)
+		case "table", "view":
+			name, err := qualifiedSQLName(obj.DatabaseName, obj.Name)
+			if err != nil {
+				return err
+			}
+			query = fmt.Sprintf("DROP %s IF EXISTS %s", strings.ToUpper(obj.Type), name) // #nosec G201 -- obj.Type is "table" or "view" here and name is validated by qualifiedSQLName
 		case "database":
-			query = fmt.Sprintf("DROP DATABASE IF EXISTS %s", obj.Name)
+			if err := validateSQLIdentifier("database name", obj.Name); err != nil {
+				return err
+			}
+			query = fmt.Sprintf("DROP DATABASE IF EXISTS %s", obj.Name) // #nosec G201 -- obj.Name is validated by validateSQLIdentifier
 		}
 	}
 
@@ -456,11 +486,17 @@ func (f *CascadeDeleteTestFramework) detectOrphanedRecords(db *sql.DB, obj Objec
 }
 
 func (f *CascadeDeleteTestFramework) buildOrphanDetectionQuery(obj ObjectInfo, dependency string) string {
-	// Build provider-specific query to detect orphaned records
+	// Build provider-specific query to detect orphaned records.
+	// The schema (PostgreSQL) or database (MySQL) name goes into the SQL
+	// text, so an unsafe one builds no query, as an unknown relationship does.
 	switch f.ProviderType {
 	case "postgres":
 		// Example: Find comments without posts
 		if obj.Name == "comments" && strings.Contains(dependency, "posts") {
+			if validateSQLIdentifier("schema name", obj.SchemaName) != nil {
+				return ""
+			}
+			// #nosec G201 -- obj.SchemaName is validated above and obj.Name is the constant "comments"
 			return fmt.Sprintf(`
 				SELECT COUNT(*)
 				FROM %s.%s c
@@ -471,6 +507,10 @@ func (f *CascadeDeleteTestFramework) buildOrphanDetectionQuery(obj ObjectInfo, d
 	case "mysql":
 		// Example: Find comments without posts
 		if obj.Name == "comments" && strings.Contains(dependency, "posts") {
+			if validateSQLIdentifier("database name", obj.DatabaseName) != nil {
+				return ""
+			}
+			// #nosec G201 -- obj.DatabaseName is validated above and obj.Name is the constant "comments"
 			return fmt.Sprintf(`
 				SELECT COUNT(*)
 				FROM %s.%s c
@@ -616,22 +656,31 @@ func (f *CascadeDeleteTestFramework) scanForAllOrphans(ctx context.Context, db *
 	return orphans
 }
 
-func (f *CascadeDeleteTestFramework) cleanupIntentionalOrphans(ctx context.Context, db *sql.DB, orphans []OrphanedResource) {
+// cleanupIntentionalOrphans deletes the orphans createIntentionalOrphans
+// made. It attempts every orphan and returns the errors joined.
+func (f *CascadeDeleteTestFramework) cleanupIntentionalOrphans(ctx context.Context, db *sql.DB, orphans []OrphanedResource) error {
+	var errs []error
 	// Clean up orphans created for testing
 	for _, orphan := range orphans {
 		// Delete orphaned records
 		var query string
 		switch f.ProviderType {
-		case "postgres":
-			query = fmt.Sprintf("DELETE FROM %s.%s WHERE /* orphan condition */", orphan.SchemaName, orphan.Name)
-		case "mysql":
-			query = fmt.Sprintf("DELETE FROM %s.%s WHERE /* orphan condition */", orphan.DatabaseName, orphan.Name)
+		case "postgres", "mysql":
+			name, err := qualifiedSQLName(objectQualifier(f.ProviderType, orphan.SchemaName, orphan.DatabaseName), orphan.Name)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("orphan %s: %w", orphan.Name, err))
+				continue
+			}
+			query = fmt.Sprintf("DELETE FROM %s WHERE /* orphan condition */", name) // #nosec G201 -- name is validated by qualifiedSQLName
 		}
 
 		if query != "" {
-			db.ExecContext(ctx, query)
+			if _, err := db.ExecContext(ctx, query); err != nil {
+				errs = append(errs, fmt.Errorf("delete orphans in %s: %w", orphan.Name, err))
+			}
 		}
 	}
+	return errors.Join(errs...)
 }
 
 func (f *CascadeDeleteTestFramework) testReferentialIntegrity(ctx context.Context, db *sql.DB) []IntegrityViolation {

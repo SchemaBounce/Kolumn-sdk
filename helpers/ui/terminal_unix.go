@@ -38,7 +38,7 @@ func getTerminalWidthFromFd(fd int) int {
 	}
 
 	var ws winsize
-	_, _, err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), tiocgwinsz, uintptr(unsafe.Pointer(&ws)))
+	_, _, err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), tiocgwinsz, uintptr(unsafe.Pointer(&ws))) // #nosec G103 -- TIOCGWINSZ needs a pointer to a winsize the kernel fills; ws matches struct winsize and outlives the call
 	if err != 0 {
 		return 0
 	}
