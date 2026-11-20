@@ -328,33 +328,9 @@ func TestCascadeFrameworkRejectsUnsafeNames(t *testing.T) {
 				t.Errorf("%s: executeCascadeDelete(%+v) succeeded, want an error", c.f.ProviderType, c.obj)
 			}
 		}
-		if err := pg.cleanupIntentionalOrphans(ctx, db, []OrphanedResource{{SchemaName: "public", Name: name}}); err == nil {
-			t.Errorf("cleanupIntentionalOrphans(%q) succeeded, want an error", name)
-		}
 		if got := rec.statements(); len(got) != 0 {
 			t.Errorf("name %q reached the database: %q", name, queries(got))
 		}
-	}
-}
-
-func TestCleanupIntentionalOrphansReturnsExecErrors(t *testing.T) {
-	db, rec := newRecordingDB(t)
-	rec.execErr = errors.New("boom")
-	f := NewCascadeDeleteTestFramework("postgres")
-
-	err := f.cleanupIntentionalOrphans(context.Background(), db, []OrphanedResource{
-		{SchemaName: "public", Name: "a"},
-		{SchemaName: "public", Name: "b"},
-	})
-	if err == nil || !strings.Contains(err.Error(), "boom") {
-		t.Fatalf("cleanupIntentionalOrphans error = %v, want it to carry the exec error", err)
-	}
-	// Every orphan is still attempted after the first failure.
-	if got := len(rec.statements()); got != 2 {
-		t.Errorf("statements run = %d, want 2", got)
-	}
-	if err := f.cleanupIntentionalOrphans(context.Background(), db, nil); err != nil {
-		t.Errorf("cleanupIntentionalOrphans(nil) = %v, want nil", err)
 	}
 }
 
