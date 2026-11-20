@@ -532,15 +532,12 @@ func (f *BackupIntegrityFramework) getTableDataInfo(db *sql.DB, objRef ObjectRef
 			return "", 0, 0, err
 		}
 
-		// Calculate checksum
-		// #nosec G201 -- objRef.Name and name are validated by qualifiedSQLName
-		checksumQuery := fmt.Sprintf(`
-			SELECT md5(string_agg(md5(CAST((t.*) AS text)), '' ORDER BY %s.ctid))
-			FROM %s t`, objRef.Name, name)
-
 		var checksumResult sql.NullString
-		err = db.QueryRow(checksumQuery).Scan(&checksumResult)
-		if err == nil && checksumResult.Valid {
+		err = db.QueryRow(postgresChecksumQuery(name)).Scan(&checksumResult)
+		if err != nil {
+			return "", 0, 0, fmt.Errorf("checksum %s: %w", name, err)
+		}
+		if checksumResult.Valid {
 			checksum = checksumResult.String
 		}
 
@@ -570,6 +567,28 @@ func (f *BackupIntegrityFramework) getTableDataInfo(db *sql.DB, objRef ObjectRef
 	dataSize = rowCount * 100 // Rough estimate
 
 	return checksum, rowCount, dataSize, nil
+}
+
+// postgresChecksumQuery returns the query that fingerprints the rows of the
+// PostgreSQL table name, which the caller has validated with
+// qualifiedSQLName. Every reference to the table after FROM goes through the
+// alias t: once a table is aliased, PostgreSQL rejects its own name as
+// "invalid reference to FROM-clause entry".
+//
+// The rows are ordered by their own hash rather than by ctid, so the checksum
+// depends only on the table's contents: VACUUM FULL, CLUSTER and updates that
+// move rows do not change it. Identical rows hash identically, so ties in the
+// ordering cannot change the result either.
+//
+// string_agg over no rows is NULL, so an empty table would get no checksum and
+// fail validation as "Missing data checksum". COALESCE gives it the md5 of the
+// empty string, which no non-empty table can produce: their aggregated string
+// is never empty.
+func postgresChecksumQuery(name string) string {
+	// #nosec G201 -- name is validated by qualifiedSQLName
+	return fmt.Sprintf(`
+			SELECT COALESCE(md5(string_agg(md5(CAST((t.*) AS text)), '' ORDER BY md5(CAST((t.*) AS text)))), md5(''))
+			FROM %s t`, name)
 }
 
 func (f *BackupIntegrityFramework) getObjectDependencies(db *sql.DB, objRef ObjectReference) ([]string, error) {
